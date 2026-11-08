@@ -31,6 +31,7 @@ final class Store {
             for (String b : Json.strings(root.get("blocked"))) s.blocked.add(b.toLowerCase(Locale.ROOT));
             s.signedUp.addAll(Json.strings(root.get("signedUp")));
             for (Object o : Json.arr(root.get("runs"))) s.runs.add(Json.obj(o));
+            for (Job j : s.jobs.values()) s.seen.putIfAbsent(j.fuzzyKey(), "kept");   // jobs saved before the looser key existed
         }
         return s;
     }
@@ -64,12 +65,13 @@ final class Store {
     // ----- jobs -----
 
     synchronized boolean isKnown(Job j) {
-        return jobs.containsKey(j.id) || seen.containsKey(j.id) || seen.containsKey(j.dupKey());
+        return jobs.containsKey(j.id) || seen.containsKey(j.id) || seen.containsKey(j.dupKey()) || seen.containsKey(j.fuzzyKey());
     }
 
     synchronized void markSeen(Job j, String why) {
         seen.put(j.id, why);
         seen.put(j.dupKey(), why);
+        seen.put(j.fuzzyKey(), why);
     }
 
     synchronized void add(Job j) {

@@ -89,8 +89,8 @@
 
 <script>
 const H = {'X-JobHunter': '1', 'Content-Type': 'application/json'};
-let JOBS = [], PLATS = [], TARGETS = [], STATE = {}, TAB = 'NEW';
-const TABS = [['NEW', 'Queue'], ['APPROVED', 'Approved'], ['APPLIED', 'Applied'], ['FOLLOWUP', 'Follow up'], ['TARGETS', 'Job boards'], ['PLATFORMS', 'Platforms to join'], ['HIDDEN', 'Hidden']];
+let JOBS = [], PLATS = [], TARGETS = [], STATE = {}, SUMMARY = null, TAB = 'NEW';
+const TABS = [['NEW', 'Queue'], ['APPROVED', 'Approved'], ['APPLIED', 'Applied'], ['FOLLOWUP', 'Follow up'], ['SUMMARY', 'This week'], ['TARGETS', 'Job boards'], ['PLATFORMS', 'Platforms to join'], ['HIDDEN', 'Hidden']];
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -104,7 +104,7 @@ async function api(path, method = 'GET', body) {
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2400); }
 
 async function load() {
-  [STATE, JOBS, PLATS, TARGETS] = await Promise.all([api('/api/state'), api('/api/jobs'), api('/api/platforms'), api('/api/targets')]);
+  [STATE, JOBS, PLATS, TARGETS, SUMMARY] = await Promise.all([api('/api/state'), api('/api/jobs'), api('/api/platforms'), api('/api/targets'), api('/api/summary')]);
   const by = (STATE.stats || {}).byStatus || {};
   $('stNew').textContent = (by.NEW || 0) + ' new';
   $('stApproved').textContent = (by.APPROVED || 0) + ' approved';
@@ -126,11 +126,12 @@ function render() {
   const dueCount = JOBS.filter(j => j.followDue).length;
   $('tabs').innerHTML = TABS.map(([k, l]) => '<button class="' + (k === TAB ? 'on' : '') + '" data-tab="' + k + '">' + l + (k === 'FOLLOWUP' && dueCount ? ' (' + dueCount + ')' : '') + '</button>').join('');
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.tab; render(); });
-  $('filters').style.display = TAB === 'PLATFORMS' || TAB === 'TARGETS' || TAB === 'FOLLOWUP' ? 'none' : '';
+  $('filters').style.display = ['PLATFORMS', 'TARGETS', 'FOLLOWUP', 'SUMMARY'].includes(TAB) ? 'none' : '';
   const list = $('list');
   $('exportBar').style.display = TAB === 'APPLIED' ? '' : 'none';
   if (TAB === 'PLATFORMS') { list.innerHTML = renderPlatforms(); bindPlatforms(); return; }
   if (TAB === 'TARGETS') { list.innerHTML = renderTargets(); bindTargets(); return; }
+  if (TAB === 'SUMMARY') { list.innerHTML = renderSummary(); return; }
   if (TAB === 'FOLLOWUP') {
     const due = JOBS.filter(j => j.followDue).sort((a, b) => (b.daysSince || 0) - (a.daysSince || 0));
     list.innerHTML = due.length ? due.map(followCard).join('')
@@ -179,6 +180,20 @@ function card(j) {
     + '<div class="desc">' + esc(j.description) + '</div></details>'
     + '<div class="actions">' + acts
     + '<button data-a="cv">Tailored CV</button><button data-a="cover">Cover letter</button><button data-a="reviews">Check reviews</button><button class="danger" data-a="block">Block employer</button></div></div>';
+}
+
+function renderSummary() {
+  const s = SUMMARY;
+  if (!s) return '<div class="empty">No data yet.</div>';
+  const tile = (n, l) => '<div class="card" style="flex:1;min-width:130px;text-align:center"><div style="font-size:28px;font-weight:700">' + esc(n) + '</div><div class="meta">' + esc(l) + '</div></div>';
+  const rows = (items, cols) => items.map(r => '<tr>' + cols.map(c => '<td style="padding:4px 12px 4px 0">' + esc(r[c]) + '</td>').join('') + '</tr>').join('');
+  return '<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    + tile(s.found, 'jobs found, last ' + s.days + ' days') + tile(s.applied, 'applied') + tile(s.replies, 'replies')
+    + tile(s.replyRatePct + '%', 'reply rate (' + s.totalApplied + ' applied in total)') + tile(s.followUpsDue, 'follow-ups due') + '</div>'
+    + '<div class="card"><p class="title">Best sources</p><div class="meta">Ranked by replies, then applications, then jobs found.</div>'
+    + (s.sources.length ? '<table><tr><th align="left">Source</th><th align="left">Found</th><th align="left">Applied</th><th align="left">Replied</th></tr>' + rows(s.sources, ['source', 'found', 'applied', 'replied']) + '</table>' : '<div class="meta">Nothing yet.</div>') + '</div>'
+    + '<div class="card"><p class="title">What to learn next</p><div class="meta">Keywords that recent jobs asked for and your CV does not have. Add one to config/cv.json only if it is true for you.</div>'
+    + (s.gaps.length ? '<table><tr><th align="left">Keyword</th><th align="left">Jobs asking</th></tr>' + rows(s.gaps, ['keyword', 'jobs']) + '</table>' : '<div class="meta">No gaps in recent jobs.</div>') + '</div>';
 }
 
 function followCard(j) {

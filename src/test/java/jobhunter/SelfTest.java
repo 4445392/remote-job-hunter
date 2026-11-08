@@ -51,6 +51,8 @@ public final class SelfTest {
         csvTests();
         followUpTests();
         coverLetterTests();
+        dedupeTests();
+        summaryTests();
         System.out.println(passed + " passed, " + failed + " failed");
         System.exit(failed > 0 ? 1 : 0);
     }
@@ -605,6 +607,74 @@ public final class SelfTest {
             eq("replied status accepted", 200, rep.statusCode());
             eq("job is replied", Job.REPLIED, st.get("fu1").status);
         } finally { srv.stop(0); }
+    }
+
+    static void summaryTests() throws Exception {
+        Instant now = Instant.parse("2026-11-20T12:00:00Z");
+        java.util.function.Function<Instant, String> ago = t -> t.toString();
+        Job j1 = csvJob("One", "A", Job.NEW, "", "https://1.example"); j1.source = "SrcA"; j1.foundAt = ago.apply(now.minus(2, ChronoUnit.DAYS)); j1.id = "s1";
+        Job j2 = csvJob("Two", "B", Job.APPLIED, ago.apply(now.minus(1, ChronoUnit.DAYS)), "https://2.example"); j2.source = "SrcA"; j2.foundAt = ago.apply(now.minus(3, ChronoUnit.DAYS)); j2.id = "s2";
+        Job j3 = csvJob("Three", "C", Job.REPLIED, ago.apply(now.minus(2, ChronoUnit.DAYS)), "https://3.example"); j3.source = "SrcB"; j3.foundAt = ago.apply(now.minus(30, ChronoUnit.DAYS)); j3.id = "s3";
+        Job j4 = csvJob("Four", "D", Job.REJECTED, ago.apply(now.minus(1, ChronoUnit.DAYS)), "https://4.example"); j4.source = "SrcB"; j4.foundAt = ago.apply(now.minus(1, ChronoUnit.DAYS)); j4.id = "s4";
+        Map<String, List<String>> gapsByJob = Map.of("s1", List.of("docker", "python"), "s2", List.of("docker"), "s3", List.of("sql"), "s4", List.of("kubernetes"));
+        Map<String, Object> s = Summary.weekly(List.of(j1, j2, j3, j4), now, 7, j -> gapsByJob.get(j.id));
+        eq("found in the last 7 days", 3, s.get("found"));
+        eq("applied counts applied and replied this week", 2, s.get("applied"));
+        eq("replies this week", 1, s.get("replies"));
+        eq("reply rate across all applications", 50, s.get("replyRatePct"));
+        eq("total applied", 2, s.get("totalApplied"));
+        eq("nothing due yet", 0, s.get("followUpsDue"));
+        List<?> sources = (List<?>) s.get("sources");
+        eq("best source is the one with a reply", "SrcB", ((Map<?, ?>) sources.get(0)).get("source"));
+        List<?> gaps = (List<?>) s.get("gaps");
+        eq("most common gap first", "docker", ((Map<?, ?>) gaps.get(0)).get("keyword"));
+        eq("gap count", 2, ((Map<?, ?>) gaps.get(0)).get("jobs"));
+        check("old jobs do not add gaps", gaps.stream().noneMatch(g -> "sql".equals(((Map<?, ?>) g).get("keyword"))));
+        check("skipped jobs do not add gaps", gaps.stream().noneMatch(g -> "kubernetes".equals(((Map<?, ?>) g).get("keyword"))));
+        eq("empty store", 0, Summary.weekly(List.of(), now, 7, j -> List.of()).get("found"));
+
+        Path tmp = Files.createTempDirectory("jh-sum");
+        Settings ss = new Settings(tmp, null, null, null, "m");
+        Store st = Store.load(ss.stateFile());
+        HttpServer srv = new Dashboard(ss, profile, st, new Pipeline(ss, profile, st, new Http())).start(0);
+        try {
+            HttpResponse<String> r = HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://localhost:" + srv.getAddress().getPort() + "/api/summary")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("summary endpoint ok", 200, r.statusCode());
+            check("summary endpoint has the numbers", r.body().contains("\"found\":0") && r.body().contains("\"gaps\""));
+        } finally { srv.stop(0); }
+    }
+
+    static void dedupeTests() throws Exception {
+        Job a = job("Senior Java Developer (Remote)", "Acme, Inc.", "Worldwide", "x");
+        Job b = job("Sr. Java Dev", "ACME Inc", "Anywhere", "y");
+        eq("same job on two boards: abbreviations, suffixes, remote tag", a.fuzzyKey(), b.fuzzyKey());
+        eq("word order ignored", job("Data Analyst, Junior", "Zed Ltd", "", "p").fuzzyKey(), job("Junior Data Analyst", "Zed", "", "q").fuzzyKey());
+        check("different company is a different job", !a.fuzzyKey().equals(job("Senior Java Developer", "Other Co", "", "z").fuzzyKey()));
+        check("senior and junior are different jobs", !job("Senior Java Developer", "Acme", "", "1").fuzzyKey().equals(job("Junior Java Developer", "Acme", "", "2").fuzzyKey()));
+        check("different countries stay separate", !job("AI Data Rater - Swedish (Latvia)", "Welo", "", "1").fuzzyKey()
+                .equals(job("AI Data Rater - Swedish (Estonia)", "Welo", "", "2").fuzzyKey()));
+        Job nocompany = job("AI Trainer", "", "", "n");
+        eq("no company falls back to the old key", nocompany.dupKey(), nocompany.fuzzyKey());
+
+        Path dir = Files.createTempDirectory("jh-dd");
+        Settings s = new Settings(dir, null, null, null, "m");
+        Store store = Store.load(s.stateFile());
+        Pipeline p = new Pipeline(s, profile, store, new Http());
+        Pipeline.Counts c = new Pipeline.Counts();
+        p.process(List.of(
+                job("AI Trainer (Remote)", "Good Co Inc", "Worldwide", "Evaluate LLM responses. Flexible hours. Part-time."),
+                job("AI Trainer", "Good Co", "Worldwide", "Evaluate LLM responses. Flexible hours. Part-time. Posted on another board."),
+                job("Excel Analyst", "Different Co", "Worldwide", "Excel, SQL, dashboards. Flexible hours.")), c);
+        eq("cross-board duplicate caught in one run", 1, c.duplicates);
+        check("the other jobs are not lost", c.added + c.rejected + c.lowScore == 2);
+
+        // survives a restart, and jobs saved before this key existed are still recognised
+        store.save();
+        Store reloaded = Store.load(s.stateFile());
+        check("duplicate still caught after restart", reloaded.isKnown(job("AI Trainer", "GOOD CO", "Worldwide", "third board")));
+        Job legacy = job("Support Agent", "Legacy Ltd", "", "l");
+        Files.writeString(dir.resolve("old.json"), Json.write(Map.of("jobs", List.of(legacy.toMap()))));
+        check("old state without the new key is still deduped", Store.load(dir.resolve("old.json")).isKnown(job("Support Agent (Remote)", "Legacy", "", "other board")));
     }
 
     static void coverLetterTests() throws Exception {

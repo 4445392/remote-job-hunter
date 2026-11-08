@@ -84,6 +84,9 @@ final class Dashboard {
             } else if (method.equals("GET") && path.equals("/api/export.csv")) {
                 ex.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"applications.csv\"");
                 send(ex, 200, "text/csv; charset=utf-8", Csv.applications(store.all()));
+            } else if (method.equals("GET") && path.equals("/api/summary")) {
+                json(ex, Summary.weekly(store.all(), Instant.now(), 7,
+                        j -> profile.cv == null ? List.of() : profile.cv.report(j, profile).missing()));
             } else if (method.equals("GET") && path.equals("/api/platforms")) {
                 json(ex, platforms());
             } else if (method.equals("GET") && path.equals("/api/targets")) {

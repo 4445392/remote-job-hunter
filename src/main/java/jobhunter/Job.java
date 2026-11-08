@@ -46,6 +46,37 @@ final class Job {
         return "d" + Text.sha(Text.norm(title) + "|" + Text.norm(company));
     }
 
+    private static final Set<String> TITLE_NOISE = Set.of("remote", "worldwide", "anywhere", "wfh", "hybrid", "contract", "contractor",
+            "freelance", "temporary", "parttime", "fulltime", "urgent", "hiring", "a", "an", "the", "of", "for", "and", "to", "in");
+    private static final Set<String> COMPANY_NOISE = Set.of("inc", "llc", "ltd", "limited", "gmbh", "corp", "corporation", "co",
+            "company", "plc", "pty", "bv", "ag", "sa", "the");
+    private static final Map<String, String> TITLE_WORDS = Map.of("sr", "senior", "jr", "junior", "dev", "developer",
+            "engr", "engineer", "swe", "software engineer", "ai", "ai");
+
+    /**
+     * Looser "same job on another board" key: ignores case, word order, punctuation, legal suffixes (Inc, Ltd, GmbH),
+     * work-mode words like "(Remote)" and common abbreviations (Sr, Jr, Dev). Falls back to dupKey() when there is no
+     * company, because two different employers must never be merged.
+     */
+    String fuzzyKey() {
+        String c = words(company, COMPANY_NOISE, Map.of());
+        if (c.isEmpty()) return dupKey();
+        String t = nz(title).toLowerCase(Locale.ROOT)
+                .replaceAll("[(\\[][^)\\]]*\\b(remote|worldwide|anywhere|contract|freelance|part[- ]time|full[- ]time|hybrid)\\b[^)\\]]*[)\\]]", " ")
+                .replace("&", " and ").replace("part-time", "parttime").replace("full-time", "fulltime");
+        return "f" + Text.sha(words(t, TITLE_NOISE, TITLE_WORDS) + "|" + c);
+    }
+
+    /** Lower-case words, noise removed, abbreviations expanded, sorted so word order does not matter. */
+    private static String words(String s, Set<String> noise, Map<String, String> expand) {
+        TreeSet<String> out = new TreeSet<>();
+        for (String w : nz(s).toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9+#]+", " ").trim().split(" ")) {
+            if (w.isEmpty() || noise.contains(w)) continue;
+            out.addAll(Arrays.asList(expand.getOrDefault(w, w).split(" ")));
+        }
+        return String.join(" ", out);
+    }
+
     static String normalizeUrl(String u) {
         String s = nz(u).trim();
         int h = s.indexOf('#');
