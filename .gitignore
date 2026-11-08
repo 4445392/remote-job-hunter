@@ -1,0 +1,11 @@
+# personal files: never publish these
+config/profile.json
+config/cv.json
+cv/
+data/
+# build output
+out/
+out-test/
+*.jar
+sources.txt
+test-sources.txt

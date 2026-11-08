@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote Job Hunter</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1b2430; --mute: #667085; --line: #e3e7ee;
+    --accent: #1f6feb; --good: #1a7f4b; --warn: #b45309; --bad: #b42318; --chip: #eef2f7; --on: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f141b; --card: #171e28; --ink: #e8edf4; --mute: #98a2b3; --line: #263041; --accent: #5b9dff;
+            --good: #4cc38a; --warn: #f0b04b; --bad: #ff7b72; --chip: #223044; --on: #0b1220; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--card); border-bottom: 1px solid var(--line); padding: 12px 20px; }
+  .bar { max-width: 1000px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  h1 { font-size: 18px; margin: 0; }
+  .grow { flex: 1; }
+  .pill { background: var(--chip); border-radius: 999px; padding: 3px 11px; font-size: 13px; color: var(--mute); }
+  button, select, input[type=search] { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 6px 12px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on); }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: default; }
+  nav { max-width: 1000px; margin: 14px auto 0; padding: 0 20px; display: flex; gap: 6px; flex-wrap: wrap; }
+  nav button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .filters { max-width: 1000px; margin: 10px auto 0; padding: 0 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; color: var(--mute); font-size: 14px; }
+  main { max-width: 1000px; margin: 14px auto 60px; padding: 0 20px; display: grid; gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .top { display: flex; gap: 14px; align-items: flex-start; }
+  .score { min-width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: var(--on); background: var(--mute); }
+  .score.hi { background: var(--good); } .score.mid { background: var(--accent); } .score.lo { background: var(--warn); }
+  .title { font-size: 16px; font-weight: 600; margin: 0; }
+  .title a { color: inherit; text-decoration: none; } .title a:hover { text-decoration: underline; }
+  .meta { color: var(--mute); font-size: 13px; margin-top: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { background: var(--chip); border-radius: 6px; padding: 2px 8px; font-size: 12px; }
+  .chip.type { background: var(--accent); color: var(--on); }
+  .flag { color: var(--warn); font-size: 13px; margin-top: 6px; }
+  .why { color: var(--mute); font-size: 13px; margin-top: 6px; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--accent); font-size: 14px; }
+  textarea { width: 100%; min-height: 230px; margin-top: 8px; font: 13.5px/1.5 ui-monospace, Consolas, monospace; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--bg); color: var(--ink); }
+  .desc { white-space: pre-wrap; font-size: 13.5px; color: var(--mute); margin-top: 8px; max-height: 260px; overflow: auto; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .empty { text-align: center; color: var(--mute); padding: 50px 10px; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .plat { display: flex; gap: 12px; align-items: flex-start; }
+  .plat input { margin-top: 5px; transform: scale(1.2); }
+  .note { font-size: 13px; color: var(--mute); }
+  .cvm { font-size: 13px; margin-top: 6px; }
+  .cvm b { color: var(--good); } .cvm .miss { color: var(--warn); }
+  .fit { display: inline-block; min-width: 22px; text-align: center; border-radius: 6px; font-weight: 700; font-size: 12px; padding: 1px 6px; color: var(--on); background: var(--mute); }
+  .fit.A { background: var(--good); } .fit.B { background: var(--accent); } .fit.C { background: var(--warn); }
+  .links a { margin-right: 14px; font-size: 13.5px; color: var(--accent); }
+  .paste input, .paste textarea { width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: var(--bg); color: var(--ink); margin-top: 6px; }
+  .paste textarea { min-height: 140px; font: 13.5px/1.5 system-ui, sans-serif; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Remote Job Hunter</h1>
+    <span class="pill" id="stNew">0 new</span>
+    <span class="pill" id="stApproved">0 approved</span>
+    <span class="pill" id="stApplied">0 applied</span>
+    <span class="grow"></span>
+    <span class="pill" id="runInfo"></span>
+    <button class="primary" id="runBtn">Search now</button>
+  </div>
+</header>
+<nav id="tabs"></nav>
+<div class="filters" id="filters">
+  <label>Min score <input type="range" id="minScore" min="0" max="100" value="40"> <b id="minScoreV">40</b></label>
+  <select id="typeSel"><option value="">All types</option></select>
+  <select id="srcSel"><option value="">All sources</option></select>
+  <input type="search" id="q" placeholder="Search title or company">
+</div>
+<main id="list"></main>
+<div class="toast" id="toast"></div>
+
+<script>
+const H = {'X-JobHunter': '1', 'Content-Type': 'application/json'};
+let JOBS = [], PLATS = [], TARGETS = [], STATE = {}, TAB = 'NEW';
+const TABS = [['NEW', 'Queue'], ['APPROVED', 'Approved'], ['APPLIED', 'Applied'], ['TARGETS', 'Job boards'], ['PLATFORMS', 'Platforms to join'], ['HIDDEN', 'Hidden']];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const safeUrl = u => /^https?:\/\//i.test(u || '') ? u : '#';
+
+async function api(path, method = 'GET', body) {
+  const r = await fetch(path, {method, headers: H, body: body ? JSON.stringify(body) : undefined});
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2400); }
+
+async function load() {
+  [STATE, JOBS, PLATS, TARGETS] = await Promise.all([api('/api/state'), api('/api/jobs'), api('/api/platforms'), api('/api/targets')]);
+  const by = (STATE.stats || {}).byStatus || {};
+  $('stNew').textContent = (by.NEW || 0) + ' new';
+  $('stApproved').textContent = (by.APPROVED || 0) + ' approved';
+  $('stApplied').textContent = (by.APPLIED || 0) + ' applied';
+  const lr = STATE.lastRun;
+  $('runInfo').textContent = STATE.running ? 'Searching...' : lr ? 'Last search: ' + new Date(lr.at).toLocaleString() + ' (+' + lr.addedToQueue + ')' : 'No search yet';
+  $('runBtn').disabled = !!STATE.running;
+  const types = [...new Set(JOBS.map(j => j.workType))].sort(), srcs = [...new Set(JOBS.map(j => j.source))].sort();
+  fill($('typeSel'), types, 'All types'); fill($('srcSel'), srcs, 'All sources');
+  render();
+}
+function fill(sel, vals, first) {
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">' + first + '</option>' + vals.map(v => '<option>' + esc(v) + '</option>').join('');
+  sel.value = vals.includes(cur) ? cur : '';
+}
+
+function render() {
+  $('tabs').innerHTML = TABS.map(([k, l]) => '<button class="' + (k === TAB ? 'on' : '') + '" data-tab="' + k + '">' + l + '</button>').join('');
+  document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.tab; render(); });
+  $('filters').style.display = TAB === 'PLATFORMS' || TAB === 'TARGETS' ? 'none' : '';
+  const list = $('list');
+  if (TAB === 'PLATFORMS') { list.innerHTML = renderPlatforms(); bindPlatforms(); return; }
+  if (TAB === 'TARGETS') { list.innerHTML = renderTargets(); bindTargets(); return; }
+
+  const min = +$('minScore').value, type = $('typeSel').value, src = $('srcSel').value, q = $('q').value.toLowerCase();
+  const wanted = TAB === 'HIDDEN' ? ['REJECTED', 'BLOCKED'] : [TAB];
+  const rows = JOBS.filter(j => wanted.includes(j.status) && j.score >= min && (!type || j.workType === type) && (!src || j.source === src)
+    && (!q || (j.title + ' ' + j.company).toLowerCase().includes(q)));
+  if (!rows.length) {
+    list.innerHTML = '<div class="empty">' + (TAB === 'NEW' ? 'Nothing here yet. Press <b>Search now</b>, or lower the minimum score.' : 'Nothing in this tab.') + '</div>';
+    return;
+  }
+  list.innerHTML = rows.slice(0, 200).map(card).join('');
+  bind();
+}
+
+function card(j) {
+  const cls = j.score >= 70 ? 'hi' : j.score >= 50 ? 'mid' : 'lo';
+  const flags = (j.flags || []).map(f => '<div class="flag">&#9888; ' + esc(f) + '</div>').join('');
+  const why = (j.why || []).length ? '<div class="why">Why: ' + (j.why || []).map(esc).join(' &middot; ') + '</div>' : '';
+  const meta = [j.company, j.source, j.location, j.pay].filter(Boolean).map(esc).join(' &middot; ');
+  const posted = j.postedAt ? ' &middot; posted ' + esc(j.postedAt.slice(0, 10)) : '';
+  const acts = j.status === 'NEW'
+    ? '<button class="primary" data-a="approve">Approve &amp; open apply page</button>' + (j.email ? '<button data-a="mail">Email draft</button>' : '')
+      + '<button data-a="applied">I applied</button><button data-a="skip">Skip</button>'
+    : j.status === 'APPROVED'
+      ? '<button class="primary" data-a="applied">I applied</button><button data-a="open">Open apply page</button>' + (j.email ? '<button data-a="mail">Email draft</button>' : '') + '<button data-a="skip">Skip</button>'
+      : '<button data-a="restore">Move back to queue</button>';
+  return '<div class="card" data-id="' + esc(j.id) + '">'
+    + '<div class="top"><div class="score ' + cls + '">' + j.score + '</div><div style="flex:1;min-width:0">'
+    + '<p class="title"><a href="' + esc(safeUrl(j.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(j.title) + '</a></p>'
+    + '<div class="meta">' + meta + posted + '</div>'
+    + '<div class="chips"><span class="chip type">' + esc(j.workType.replace('_', ' ')) + '</span>' + (j.sourceType === 'SEARCH' ? '<span class="chip">from web search</span>' : '') + '</div>'
+    + flags + why + cvLine(j) + '</div></div>'
+    + '<details><summary>Draft application and listing text</summary>'
+    + '<textarea data-draft>' + esc(j.draft) + '</textarea>'
+    + '<div class="actions"><button data-a="copy">Copy draft</button><button data-a="save">Save edits</button><button data-a="redraft">Rewrite from template</button>'
+    + (STATE.keys && STATE.keys.claude ? '<button data-a="claude">Polish with Claude</button>' : '') + '</div>'
+    + '<div class="desc">' + esc(j.description) + '</div></details>'
+    + '<div class="actions">' + acts
+    + '<button data-a="cv">Tailored CV</button><button data-a="reviews">Check reviews</button><button class="danger" data-a="block">Block employer</button></div></div>';
+}
+
+function bind() {
+  document.querySelectorAll('.card').forEach(c => {
+    const id = c.dataset.id, j = JOBS.find(x => x.id === id), ta = c.querySelector('[data-draft]');
+    c.querySelectorAll('[data-a]').forEach(b => b.onclick = () => act(b.dataset.a, j, ta));
+  });
+}
+
+async function act(a, j, ta) {
+  try {
+    const draft = ta.value;
+    if (a === 'copy') { await copy(draft); toast('Draft copied'); }
+    else if (a === 'save') { await api('/api/jobs/' + j.id + '/draft', 'POST', {draft}); toast('Saved'); await load(); }
+    else if (a === 'redraft' || a === 'claude') { toast('Writing...'); await api('/api/jobs/' + j.id + '/redraft', 'POST', {claude: a === 'claude'}); await load(); }
+    else if (a === 'approve' || a === 'open') {
+      await copy(draft);
+      window.open(safeUrl(j.applyUrl || j.url), '_blank', 'noopener');
+      if (a === 'approve') await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'APPROVED'});
+      toast('Draft copied. Paste it into the application, attach your CV.'); await load();
+    }
+    else if (a === 'mail') {
+      const m = draft.match(/^Subject:\s*(.*)\n+([\s\S]*)$/);
+      const subj = m ? m[1] : 'Application for ' + j.title, body = m ? m[2] : draft;
+      location.href = 'mailto:' + encodeURIComponent(j.email) + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body);
+      await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'APPROVED'}); toast('Attach your CV, then send.'); await load();
+    }
+    else if (a === 'applied') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'APPLIED'}); await load(); }
+    else if (a === 'skip') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'REJECTED'}); await load(); }
+    else if (a === 'restore') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'NEW'}); await load(); }
+    else if (a === 'cv') { window.open('/api/jobs/' + encodeURIComponent(j.id) + '/cv', '_blank', 'noopener'); }
+    else if (a === 'reviews') {
+      const name = j.sourceType === 'SEARCH' ? j.company : '"' + j.company + '"';
+      window.open('https://www.google.com/search?q=' + encodeURIComponent(name + ' reviews scam OR "not paying" OR "unpaid"'), '_blank', 'noopener');
+    }
+    else if (a === 'block') {
+      if (!confirm('Hide every job from "' + j.company + '" and never show them again?')) return;
+      const r = await api('/api/block', 'POST', {company: j.company}); toast('Blocked. ' + r.hidden + ' jobs hidden.'); await load();
+    }
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+}
+
+function cvLine(j) {
+  if (!j.cv) return '';
+  const miss = (j.cv.missing || []).length ? ' &middot; <span class="miss">not on your CV: ' + j.cv.missing.slice(0, 6).map(esc).join(', ') + '</span>' : '';
+  return '<div class="cvm">CV keyword match <b>' + j.cv.pct + '%</b>' + ((j.cv.matched || []).length ? ' (' + j.cv.matched.slice(0, 6).map(esc).join(', ') + ')' : '') + miss + '</div>';
+}
+
+function renderTargets() {
+  let h = '<div class="card paste"><b>Paste a job from LinkedIn, Indeed, ZipRecruiter, Handshake, Google Jobs or anywhere</b>'
+    + '<div class="note">These sites block programs from reading their pages, so: open a search below, find a job, and paste it here. It gets scored, checked for deal-breakers, a draft, and a CV tailored to it.</div>'
+    + '<div class="row2"><input id="mTitle" placeholder="Job title *"><input id="mCompany" placeholder="Company"></div>'
+    + '<div class="row2"><input id="mUrl" placeholder="Link to the job (https://...)"><input id="mLoc" placeholder="Location (e.g. Remote, South Africa)"></div>'
+    + '<textarea id="mDesc" placeholder="Paste the full job description *"></textarea>'
+    + '<div class="actions"><button class="primary" id="mAdd">Score it and tailor my CV</button></div></div>';
+  h += '<div class="card note">Your 20 target titles. Fit <span class="fit A">A</span> apply now, <span class="fit B">B</span> apply and expect some screening, <span class="fit C">C</span> close a gap first. Links search remote jobs only: LinkedIn and Indeed the <b>last 7 days</b>, ZipRecruiter 5 days; Google Jobs shows newest first, so check the dates.'
+    + (STATE.keys && (STATE.keys.brave || STATE.keys.serper) ? ' Daily automatic LinkedIn, Indeed and ZipRecruiter search: <b>on</b>.' : ' Add a Brave or Serper key to search LinkedIn, Indeed and ZipRecruiter automatically every day.')
+    + (STATE.keys && STATE.keys.serpapi ? ' Daily Google Jobs search: <b>on</b>.' : ' Add a SerpApi key to search Google Jobs every day.')
+    + ' Handshake needs your university login: see Platforms to join.</div>';
+  h += TARGETS.map(t => '<div class="card"><div><span class="fit ' + esc(t.fit) + '">' + esc(t.fit) + '</span> <b>' + esc(t.title) + '</b></div>'
+    + '<div class="chips">' + (t.keywords || []).map(k => '<span class="chip">' + esc(k) + '</span>').join('') + '</div>'
+    + '<div class="links" style="margin-top:8px">' + Object.entries(t.links || {}).map(([l, u]) => '<a href="' + esc(safeUrl(u)) + '" target="_blank" rel="noopener noreferrer">' + esc(l) + '</a>').join('') + '</div></div>').join('');
+  return h;
+}
+function bindTargets() {
+  $('mAdd').onclick = async () => {
+    const body = {title: $('mTitle').value.trim(), company: $('mCompany').value.trim(), url: $('mUrl').value.trim(), location: $('mLoc').value.trim(), description: $('mDesc').value.trim()};
+    if (!body.title || !body.description) { toast('Add at least a title and the description'); return; }
+    try {
+      const j = await api('/api/manual', 'POST', body);
+      toast('Added with score ' + j.score + '. Opening your tailored CV...');
+      window.open('/api/jobs/' + encodeURIComponent(j.id) + '/cv', '_blank', 'noopener');
+      TAB = 'NEW'; await load();
+    } catch (e) { toast('Error: ' + e.message); }
+  };
+}
+
+function renderPlatforms() {
+  const groups = {};
+  PLATS.forEach(p => (groups[p.category] = groups[p.category] || []).push(p));
+  let h = '<div class="card note">These sites need you to sign up yourself (they check your identity and skills). Join a few, tick them off here, and never pay to get access: real platforms do not charge you to start.</div>';
+  for (const [cat, items] of Object.entries(groups)) {
+    h += '<h3 style="margin:10px 0 0">' + esc(cat) + '</h3>';
+    h += items.map(p => '<div class="card plat"><input type="checkbox" data-plat="' + esc(p.id) + '"' + (p.signedUp ? ' checked' : '') + '><div>'
+      + '<b><a href="' + esc(safeUrl(p.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(p.name) + '</a></b>'
+      + '<div class="note">' + esc(p.tip) + '</div></div></div>').join('');
+  }
+  return h;
+}
+function bindPlatforms() {
+  document.querySelectorAll('[data-plat]').forEach(cb => cb.onchange = async () => {
+    try { await api('/api/platforms/' + cb.dataset.plat + '/toggle', 'POST'); await load(); } catch (e) { toast('Error: ' + e.message); }
+  });
+}
+
+$('minScore').oninput = () => { $('minScoreV').textContent = $('minScore').value; render(); };
+$('typeSel').onchange = $('srcSel').onchange = render;
+$('q').oninput = render;
+$('runBtn').onclick = async () => {
+  try {
+    const r = await api('/api/run', 'POST');
+    toast(r.started ? 'Search started. It can take a minute.' : 'A search is already running.');
+    $('runBtn').disabled = true;
+    const poll = setInterval(async () => { await load(); if (!STATE.running) clearInterval(poll); }, 4000);
+  } catch (e) { toast('Error: ' + e.message); }
+};
+load().then(() => { $('minScore').value = STATE.threshold || 40; $('minScoreV').textContent = $('minScore').value; render(); }).catch(e => toast('Error: ' + e.message));
+setInterval(() => { if (!document.hidden) load().catch(() => {}); }, 60000);
+</script>
+</body>
+</html>

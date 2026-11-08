@@ -1,0 +1,687 @@
+{
+  "name": "Your Name",
+  "email": "you@example.com",
+  "phone": "+27 00 000 0000",
+  "location": "Your city, South Africa",
+  "timezone": "SAST, UTC+2",
+  "github": "https://github.com/your-username",
+  "cvFile": "cv/Your_Name_CV.pdf",
+  "hoursPerWeek": 30,
+  "scoreThreshold": 40,
+  "maxAgeDays": 45,
+  "maxSearchQueries": 12,
+  "minHourlyUsd": {
+    "AI_TRAINING": 8,
+    "TUTORING": 8,
+    "MICROTASK": 5,
+    "FREELANCE": 10,
+    "JOB": 10
+  },
+  "fxNote": "Rough exchange rates to US dollars, used to compare pay. Update them now and then.",
+  "fx": {
+    "USD": 1.0,
+    "EUR": 1.08,
+    "GBP": 1.27,
+    "ZAR": 0.055,
+    "CAD": 0.73,
+    "AUD": 0.65
+  },
+  "dealBreakers": {
+    "upfrontFees": true,
+    "fixedHours": true,
+    "mandatoryCalls": true,
+    "geoLocked": true,
+    "unpaidWork": true
+  },
+  "blockedEmployers": [],
+  "skillGroups": [
+    {
+      "name": "ai",
+      "label": "AI training and evaluation",
+      "weight": 45,
+      "keywords": [
+        "ai trainer",
+        "ai training",
+        "ai tutor",
+        "ai evaluator",
+        "ai rater",
+        "rlhf",
+        "llm",
+        "large language model",
+        "prompt engineer",
+        "prompt engineering",
+        "prompt writer",
+        "data annotation",
+        "data annotator",
+        "annotator",
+        "annotation",
+        "data labeling",
+        "data labelling",
+        "labeling",
+        "model evaluation",
+        "response evaluation",
+        "generative ai",
+        "chatgpt",
+        "claude",
+        "machine learning",
+        "red teaming",
+        "ai"
+      ],
+      "opener": "I use AI tools such as Claude and ChatGPT regularly for coding, analysis and writing, and I follow detailed guidelines carefully.",
+      "proof": "I speak English, isiZulu, isiXhosa, siSwati and isiNdebele, which helps with language quality and review work."
+    },
+    {
+      "name": "dev",
+      "label": "Software development and code review",
+      "weight": 40,
+      "keywords": [
+        "java",
+        "spring boot",
+        "javafx",
+        "backend",
+        "back-end",
+        "back end",
+        "software developer",
+        "software engineer",
+        "developer",
+        "programmer",
+        "code review",
+        "code reviewer",
+        "junior developer",
+        "full stack",
+        "full-stack",
+        "javascript",
+        "typescript",
+        "react",
+        "sql",
+        "mysql",
+        "api",
+        "rest api",
+        "qa",
+        "test automation",
+        "unit testing"
+      ],
+      "opener": "I am a BSc Computer Science student at the University of the Western Cape who writes Java and has shipped working software.",
+      "proof": "I built and deployed a multi-till point-of-sale system for a live business (Java 21, Spring Boot, MySQL, JavaFX), and my ARISE app has 200+ automated tests."
+    },
+    {
+      "name": "data",
+      "label": "Data, Excel and databases",
+      "weight": 35,
+      "keywords": [
+        "excel",
+        "spreadsheet",
+        "spreadsheets",
+        "google sheets",
+        "data analyst",
+        "data analysis",
+        "data entry",
+        "data cleaning",
+        "statistics",
+        "statistical",
+        "statistician",
+        "sql",
+        "database",
+        "databases",
+        "dashboard",
+        "reporting",
+        "power bi",
+        "tableau",
+        "bookkeeping",
+        "bookkeeper",
+        "financial analysis",
+        "accounting"
+      ],
+      "opener": "I enjoy turning messy numbers into clear answers, and I study statistics and calculus at university.",
+      "proof": "I analyse performance for a live business and build Excel workbooks and databases to track it."
+    },
+    {
+      "name": "tutoring",
+      "label": "Tutoring and teaching",
+      "weight": 30,
+      "keywords": [
+        "tutor",
+        "tutoring",
+        "math tutor",
+        "maths tutor",
+        "mathematics",
+        "calculus",
+        "statistics tutor",
+        "teaching",
+        "instructor",
+        "homework help",
+        "stem",
+        "computer science tutor"
+      ],
+      "opener": "I am strong in calculus, statistics and Java, and I explain ideas step by step.",
+      "proof": "I have tutored Grade 12 maths, and I study mathematics (calculus 1 to 3) and statistics at university."
+    },
+    {
+      "name": "web",
+      "label": "Web design and development",
+      "weight": 30,
+      "keywords": [
+        "web developer",
+        "website",
+        "websites",
+        "wordpress",
+        "landing page",
+        "front-end",
+        "frontend",
+        "front end",
+        "html",
+        "css",
+        "web design",
+        "web designer",
+        "shopify",
+        "next.js"
+      ],
+      "opener": "I build websites and web apps for real businesses.",
+      "proof": "I built an installable offline web app (ARISE) and delivered a client website through Mvelo Studio."
+    },
+    {
+      "name": "docs",
+      "label": "Documents, slides and writing",
+      "weight": 18,
+      "keywords": [
+        "powerpoint",
+        "presentation",
+        "presentations",
+        "slides",
+        "word",
+        "documentation",
+        "technical writer",
+        "proofreading",
+        "copywriting",
+        "copywriter",
+        "content writer",
+        "editor",
+        "transcription"
+      ],
+      "opener": "I am competent in Excel, Word and PowerPoint and produce clear, tidy documents.",
+      "proof": "I have run payments, staff and daily operations for a family business, so I am used to accuracy and deadlines."
+    },
+    {
+      "name": "admin",
+      "label": "Admin and virtual assistance",
+      "weight": 18,
+      "keywords": [
+        "virtual assistant",
+        "executive assistant",
+        "admin",
+        "administrative",
+        "customer support",
+        "email support",
+        "chat support",
+        "project coordinator",
+        "operations",
+        "data entry"
+      ],
+      "opener": "I am reliable, organised and used to handling payments, staff and daily operations.",
+      "proof": "I have worked as a cashier, manager and director in a family business, so I am comfortable with customers, payments and records."
+    },
+    {
+      "name": "design",
+      "label": "Design and visuals",
+      "weight": 15,
+      "keywords": [
+        "graphic design",
+        "graphic designer",
+        "canva",
+        "video editor",
+        "video editing",
+        "poster",
+        "branding",
+        "logo"
+      ],
+      "opener": "I design clean, practical visuals for small businesses.",
+      "proof": "I have designed websites and branded documents through Mvelo Studio."
+    }
+  ],
+  "searchQueries": [
+    "remote AI trainer OR \"data annotation\" OR \"LLM evaluation\" South Africa apply",
+    "\"work from home\" \"flexible hours\" AI trainer freelance Africa",
+    "remote Java developer contract \"flexible hours\" worldwide",
+    "remote junior developer OR \"code review\" part-time worldwide \"set your own hours\"",
+    "remote Excel data analyst part-time freelance worldwide",
+    "online maths tutor OR \"statistics tutor\" OR \"calculus tutor\" remote hire",
+    "freelance web developer small business projects remote worldwide",
+    "remote virtual assistant part-time \"flexible schedule\" worldwide Africa",
+    "PowerPoint presentation designer freelance remote worldwide",
+    "site:weworkremotely.com part-time OR contract OR freelance",
+    "site:upwork.com/freelance-jobs java OR excel OR \"data analysis\" OR \"AI training\"",
+    "site:remote.co part-time OR freelance flexible hours",
+    "site:workingnomads.com data OR developer OR support"
+  ],
+  "targetTitles": [
+    {
+      "title": "AI Trainer, Coding (Java)",
+      "group": "ai",
+      "fit": "A",
+      "query": "AI trainer coding Java",
+      "match": [
+        "ai trainer",
+        "coding expertise",
+        "ai tutor",
+        "ai training"
+      ],
+      "keywords": [
+        "java",
+        "code review",
+        "evaluate ai-generated code",
+        "debugging",
+        "rlhf",
+        "llm",
+        "data structures",
+        "algorithms",
+        "unit testing",
+        "python",
+        "c++",
+        "javascript",
+        "typescript",
+        "technical writing",
+        "attention to detail"
+      ]
+    },
+    {
+      "title": "AI Code Reviewer / Code Evaluator",
+      "group": "ai",
+      "fit": "A",
+      "query": "AI code reviewer",
+      "match": [
+        "code review",
+        "code evaluator",
+        "code reviewer"
+      ],
+      "keywords": [
+        "code review",
+        "code quality",
+        "debugging",
+        "best practices",
+        "rubric",
+        "java",
+        "typescript"
+      ]
+    },
+    {
+      "title": "AI Data Annotator / AI Rater",
+      "group": "ai",
+      "fit": "A",
+      "query": "AI data annotator",
+      "match": [
+        "annotat",
+        "rater",
+        "data label",
+        "ai evaluator"
+      ],
+      "keywords": [
+        "annotation",
+        "labelling",
+        "guidelines",
+        "attention to detail",
+        "quality assurance"
+      ]
+    },
+    {
+      "title": "Junior Prompt Engineer / AI Content Specialist",
+      "group": "ai",
+      "fit": "B",
+      "query": "junior prompt engineer",
+      "match": [
+        "prompt engineer",
+        "prompt writer",
+        "ai content"
+      ],
+      "keywords": [
+        "prompt engineering",
+        "llm",
+        "chatgpt",
+        "claude",
+        "evaluation",
+        "writing"
+      ]
+    },
+    {
+      "title": "Junior Java Developer",
+      "group": "dev",
+      "fit": "A",
+      "query": "junior Java developer",
+      "match": [
+        "java developer",
+        "java engineer",
+        "java software"
+      ],
+      "keywords": [
+        "java",
+        "spring boot",
+        "rest api",
+        "mysql",
+        "sql",
+        "oop",
+        "git",
+        "unit testing",
+        "agile",
+        "maven",
+        "junit",
+        "scrum",
+        "aws",
+        "azure",
+        "angular",
+        "docker",
+        "ci/cd"
+      ]
+    },
+    {
+      "title": "Junior Backend Developer",
+      "group": "dev",
+      "fit": "A",
+      "query": "junior backend developer Java",
+      "match": [
+        "backend developer",
+        "back-end developer",
+        "backend engineer"
+      ],
+      "keywords": [
+        "java",
+        "spring boot",
+        "rest api",
+        "mysql",
+        "microservices",
+        "api design",
+        "git",
+        "docker"
+      ]
+    },
+    {
+      "title": "Software Developer Intern / Graduate",
+      "group": "dev",
+      "fit": "A",
+      "query": "software developer intern graduate",
+      "match": [
+        "internship",
+        "software intern",
+        "developer intern",
+        "graduate developer",
+        "graduate software",
+        "trainee developer"
+      ],
+      "keywords": [
+        "java",
+        "git",
+        "oop",
+        "data structures",
+        "algorithms",
+        "problem solving"
+      ]
+    },
+    {
+      "title": "Junior Full-Stack Developer",
+      "group": "dev",
+      "fit": "B",
+      "query": "junior full stack developer",
+      "match": [
+        "full stack",
+        "full-stack",
+        "fullstack"
+      ],
+      "keywords": [
+        "javascript",
+        "typescript",
+        "react",
+        "java",
+        "rest api",
+        "sql",
+        "html",
+        "css",
+        "git",
+        "node.js"
+      ]
+    },
+    {
+      "title": "Junior QA / Test Engineer",
+      "group": "dev",
+      "fit": "B",
+      "query": "junior QA test engineer",
+      "match": [
+        "qa engineer",
+        "test engineer",
+        "qa tester",
+        "software tester",
+        "quality assurance"
+      ],
+      "keywords": [
+        "test cases",
+        "regression testing",
+        "automated testing",
+        "playwright",
+        "bug reports",
+        "ci/cd",
+        "selenium",
+        "postman"
+      ]
+    },
+    {
+      "title": "Junior Front-End Developer",
+      "group": "web",
+      "fit": "B",
+      "query": "junior front end developer",
+      "match": [
+        "front end",
+        "front-end",
+        "frontend"
+      ],
+      "keywords": [
+        "html",
+        "css",
+        "javascript",
+        "typescript",
+        "react",
+        "responsive design",
+        "accessibility"
+      ]
+    },
+    {
+      "title": "Freelance Web Designer / Developer",
+      "group": "web",
+      "fit": "A",
+      "query": "freelance web designer developer",
+      "match": [
+        "web designer",
+        "web developer",
+        "website developer"
+      ],
+      "keywords": [
+        "website design",
+        "landing page",
+        "responsive design",
+        "seo",
+        "next.js",
+        "tailwind css",
+        "netlify"
+      ]
+    },
+    {
+      "title": "Junior Data Analyst",
+      "group": "data",
+      "fit": "B",
+      "query": "junior data analyst",
+      "match": [
+        "data analyst",
+        "analytics"
+      ],
+      "keywords": [
+        "excel",
+        "sql",
+        "data cleaning",
+        "dashboards",
+        "statistics",
+        "reporting",
+        "data visualisation",
+        "kpi",
+        "pivot tables",
+        "power bi",
+        "python",
+        "r",
+        "tableau"
+      ]
+    },
+    {
+      "title": "Junior BI / Reporting Analyst",
+      "group": "data",
+      "fit": "B",
+      "query": "junior BI reporting analyst",
+      "match": [
+        "bi analyst",
+        "reporting analyst",
+        "business intelligence"
+      ],
+      "keywords": [
+        "sql",
+        "dashboards",
+        "reporting",
+        "kpi",
+        "excel",
+        "data visualisation",
+        "power bi"
+      ]
+    },
+    {
+      "title": "Statistics / Research Assistant",
+      "group": "data",
+      "fit": "B",
+      "query": "statistics research assistant",
+      "match": [
+        "statistic",
+        "research assistant",
+        "research analyst"
+      ],
+      "keywords": [
+        "statistics",
+        "regression",
+        "hypothesis testing",
+        "sas",
+        "r",
+        "sampling",
+        "data analysis"
+      ]
+    },
+    {
+      "title": "Online Maths Tutor (Grade 10-12)",
+      "group": "tutoring",
+      "fit": "A",
+      "query": "online maths tutor",
+      "match": [
+        "maths tutor",
+        "math tutor",
+        "mathematics tutor",
+        "math teacher",
+        "maths teacher"
+      ],
+      "keywords": [
+        "mathematics",
+        "calculus",
+        "caps",
+        "grade 12",
+        "matric",
+        "online tutoring"
+      ]
+    },
+    {
+      "title": "Online Coding / Computer Science Tutor",
+      "group": "tutoring",
+      "fit": "A",
+      "query": "online coding tutor",
+      "match": [
+        "coding tutor",
+        "programming tutor",
+        "computer science tutor",
+        "coding teacher"
+      ],
+      "keywords": [
+        "java",
+        "programming",
+        "data structures",
+        "online tutoring"
+      ]
+    },
+    {
+      "title": "Junior Technical Writer",
+      "group": "docs",
+      "fit": "B",
+      "query": "junior technical writer",
+      "match": [
+        "technical writer",
+        "documentation"
+      ],
+      "keywords": [
+        "technical writing",
+        "documentation",
+        "markdown",
+        "api documentation",
+        "diagrams"
+      ]
+    },
+    {
+      "title": "Virtual Assistant (Admin and Data)",
+      "group": "admin",
+      "fit": "B",
+      "query": "virtual assistant data admin",
+      "match": [
+        "virtual assistant",
+        "admin assistant",
+        "data entry"
+      ],
+      "keywords": [
+        "data entry",
+        "email management",
+        "scheduling",
+        "excel",
+        "google sheets",
+        "crm"
+      ]
+    },
+    {
+      "title": "Bookkeeping Assistant (Virtual)",
+      "group": "admin",
+      "fit": "C",
+      "query": "virtual bookkeeping assistant",
+      "match": [
+        "bookkeep",
+        "accounting assistant",
+        "accounts assistant"
+      ],
+      "keywords": [
+        "bookkeeping",
+        "reconciliations",
+        "excel",
+        "invoices",
+        "accounts payable",
+        "xero",
+        "quickbooks"
+      ]
+    },
+    {
+      "title": "POS / Retail Systems Support Analyst",
+      "group": "dev",
+      "fit": "A",
+      "query": "POS support analyst",
+      "match": [
+        "pos support",
+        "pos analyst",
+        "pos technician",
+        "point of sale",
+        "retail systems",
+        "systems support"
+      ],
+      "keywords": [
+        "point of sale",
+        "technical support",
+        "troubleshooting",
+        "operations",
+        "retail",
+        "sql"
+      ]
+    }
+  ],
+  "maxBoardQueries": 10
+}

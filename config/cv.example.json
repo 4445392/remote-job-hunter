@@ -1,0 +1,94 @@
+{
+  "_note": "Copy this to cv.json and replace every line with your own, true details. The job hunter only re-orders what you write here.",
+  "linkedin": "",
+  "availability": "Remote · flexible hours · available 20+ hours a week",
+  "languages": "English (fluent)",
+  "maxProjects": 4,
+  "headlines": {
+    "default": "Junior Developer · Your degree (University, year)",
+    "dev": "Junior Java Developer",
+    "ai": "Developer and AI Code Reviewer",
+    "data": "Junior Data Analyst",
+    "tutoring": "Maths Tutor"
+  },
+  "summaries": {
+    "default": "One or two sentences on what you do and your best result.",
+    "dev": "Developer who built a Java and Spring Boot app used by real users.",
+    "ai": "Developer who reviews code carefully and uses AI tools every day.",
+    "data": "Analyst who cleans data in Excel and SQL and explains it simply.",
+    "tutoring": "Student strong in calculus and statistics who explains ideas simply."
+  },
+  "experience": [
+    {
+      "title": "Your job title",
+      "org": "Company, City",
+      "dates": "20__ – Present",
+      "bullets": [
+        {
+          "text": "Built a Java and Spring Boot system with a MySQL database, used every day by real staff.",
+          "tags": [
+            "dev",
+            "ai"
+          ]
+        },
+        {
+          "text": "Analysed sales data in Excel and SQL and reported the results to the owner.",
+          "tags": [
+            "data"
+          ]
+        },
+        {
+          "text": "Tutored a learner in mathematics.",
+          "tags": [
+            "tutoring"
+          ]
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Project name",
+      "link": "",
+      "text": "What it does, the tech you used, and one number (users, tests, lines).",
+      "tags": [
+        "dev"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "heading": "Your degree, University",
+      "dates": "20__ – 20__",
+      "details": [
+        "Strongest subjects: ..."
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "label": "Programming",
+      "items": [
+        "Java",
+        "Spring Boot",
+        "SQL",
+        "Git"
+      ],
+      "tags": [
+        "dev",
+        "ai"
+      ]
+    },
+    {
+      "label": "Data",
+      "items": [
+        "Excel",
+        "SQL",
+        "statistics"
+      ],
+      "tags": [
+        "data"
+      ]
+    }
+  ]
+}

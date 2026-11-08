@@ -1,0 +1,135 @@
+[
+  {
+    "id": "dataannotation",
+    "name": "DataAnnotation",
+    "category": "AI training",
+    "url": "https://www.dataannotation.tech",
+    "tip": "Free to join, you take a skills assessment. Coding, maths and language skills open better projects. Never pay for access."
+  },
+  {
+    "id": "outlier",
+    "name": "Outlier",
+    "category": "AI training",
+    "url": "https://outlier.ai",
+    "tip": "Model evaluation and expert tasks (coding, maths, writing). South Africa has been listed as an eligible country; check the current list when you sign up."
+  },
+  {
+    "id": "mindrift",
+    "name": "Mindrift",
+    "category": "AI training",
+    "url": "https://mindrift.ai",
+    "tip": "Part-time AI trainer projects; South African remote roles have been posted. Subject-matter skills (STEM, coding) help."
+  },
+  {
+    "id": "crowdgen",
+    "name": "Crowdgen by Appen",
+    "category": "AI training",
+    "url": "https://crowdgen.com",
+    "tip": "Text, language and data projects. Your isiZulu, isiXhosa, siSwati and isiNdebele may match some language projects."
+  },
+  {
+    "id": "prolific",
+    "name": "Prolific",
+    "category": "Micro-tasks",
+    "url": "https://www.prolific.com",
+    "tip": "Paid research studies. Small amounts but fully flexible; good while you wait for bigger platforms to accept you."
+  },
+  {
+    "id": "upwork",
+    "name": "Upwork",
+    "category": "Freelance",
+    "url": "https://www.upwork.com",
+    "tip": "Build a profile around two clear services (for example Excel dashboards and Java/JavaFX programs). Apply by hand to a few jobs a day; automated applying can get the account banned."
+  },
+  {
+    "id": "freelancer",
+    "name": "Freelancer.com",
+    "category": "Freelance",
+    "url": "https://www.freelancer.com",
+    "tip": "Lots of small projects. Good for first reviews; watch for clients who want free test work."
+  },
+  {
+    "id": "peopleperhour",
+    "name": "PeoplePerHour",
+    "category": "Freelance",
+    "url": "https://www.peopleperhour.com",
+    "tip": "UK-leaning marketplace; fixed-price 'Hourlies' suit simple Excel and website jobs."
+  },
+  {
+    "id": "fiverr",
+    "name": "Fiverr",
+    "category": "Freelance",
+    "url": "https://www.fiverr.com",
+    "tip": "Sell packaged services (Excel automation, PowerPoint decks, simple websites, maths tutoring). Buyers find you, so there is no applying."
+  },
+  {
+    "id": "contra",
+    "name": "Contra",
+    "category": "Freelance",
+    "url": "https://contra.com",
+    "tip": "Portfolio-first freelance site with low fees; a strong GitHub and project write-ups transfer well."
+  },
+  {
+    "id": "preply",
+    "name": "Preply",
+    "category": "Tutoring",
+    "url": "https://preply.com",
+    "tip": "Set your own hours and price. Check the current subject list; teaching isiZulu or isiXhosa may be a low-competition niche."
+  },
+  {
+    "id": "superprof",
+    "name": "Superprof",
+    "category": "Tutoring",
+    "url": "https://www.superprof.co.za",
+    "tip": "Maths, statistics and programming tutoring with your own rates. Good for South African students as well as online."
+  },
+  {
+    "id": "remoteco",
+    "name": "Remote.co",
+    "category": "Job board",
+    "url": "https://remote.co/remote-jobs/",
+    "tip": "Hand-screened remote jobs. The tool reaches it through web search; browse it yourself too."
+  },
+  {
+    "id": "workingnomads",
+    "name": "Working Nomads",
+    "category": "Job board",
+    "url": "https://www.workingnomads.com/jobs",
+    "tip": "Curated remote jobs across development, support and admin."
+  },
+  {
+    "id": "wellfound",
+    "name": "Wellfound",
+    "category": "Job board",
+    "url": "https://wellfound.com/jobs",
+    "tip": "Startup jobs; filter for remote and contract roles that accept applicants from Africa."
+  },
+  {
+    "id": "handshake",
+    "name": "Handshake",
+    "category": "Student job networks",
+    "url": "https://joinhandshake.com/",
+    "tip": "Student and graduate jobs and internships, many remote. You join through your university, and most partner universities are in the US and UK. Ask UWC Careers whether UWC is on Handshake; if not, the app has no jobs for you yet."
+  },
+  {
+    "id": "ziprecruiter",
+    "name": "ZipRecruiter",
+    "category": "Job board",
+    "url": "https://www.ziprecruiter.com/",
+    "tip": "Big job board, mostly US jobs. Many 'remote' roles are US-only, so the job hunter screens them out. Use it for worldwide-remote and freelance roles; the LinkedIn & Indeed tab has a ZipRecruiter search for each target title."
+  },
+  {
+    "id": "googlejobs",
+    "name": "Google Jobs",
+    "category": "Job board",
+    "url": "https://www.google.com/search?q=remote+jobs+south+africa&ibp=htl;jobs",
+    "tip": "Google gathers jobs from thousands of sites. Use the Google Jobs links in the LinkedIn & Indeed tab, or set SERPAPI_KEY so the job hunter searches it every day."
+  },
+  {
+    "id": "wonderin",
+    "name": "Wonderin AI",
+    "category": "Optional tools",
+    "url": "https://www.wonderin.ai/",
+    "tip": "An AI CV and cover-letter tailoring tool (paid plans from about $9.99 a month), not a job board. The job hunter's free Tailored CV button does the same job from your own cv.json, so you do not need to pay for it. Try the free trial only if you want a second opinion."
+  }
+]
