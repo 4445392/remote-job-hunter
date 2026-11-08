@@ -4,7 +4,7 @@ import java.util.*;
 
 /** One job (or gig, or platform listing) moving through the pipeline. */
 final class Job {
-    static final String NEW = "NEW", APPROVED = "APPROVED", APPLIED = "APPLIED", REJECTED = "REJECTED", BLOCKED = "BLOCKED";
+    static final String NEW = "NEW", APPROVED = "APPROVED", APPLIED = "APPLIED", REPLIED = "REPLIED", REJECTED = "REJECTED", BLOCKED = "BLOCKED";
 
     String id = "", source = "", sourceType = "BOARD"; // sourceType: BOARD or SEARCH
     String title = "", company = "", url = "", applyUrl = "", location = "", type = "";
@@ -19,6 +19,8 @@ final class Job {
     List<String> flags = new ArrayList<>();     // things to double-check before applying
     String status = NEW;
     String draft = "", foundAt = "", statusAt = "", note = "";
+    String followedUpAt = "";                   // last time you sent a follow-up (restarts the 7-day clock)
+    boolean noReminder;                         // "stop reminding me" for this job
 
     /** Cleans fields and computes the id. Call after setting the raw fields. */
     Job finish() {
@@ -84,6 +86,7 @@ final class Job {
         m.put("workType", workType); m.put("score", score); m.put("why", why); m.put("flags", flags);
         m.put("status", status); m.put("draft", draft); m.put("foundAt", foundAt);
         m.put("statusAt", statusAt); m.put("note", note);
+        m.put("followedUpAt", followedUpAt); m.put("noReminder", noReminder);
         return m;
     }
 
@@ -109,6 +112,7 @@ final class Job {
         j.status = s(m, "status"); if (j.status.isEmpty()) j.status = NEW;
         if (j.sourceType.isEmpty()) j.sourceType = "BOARD";
         j.draft = s(m, "draft"); j.foundAt = s(m, "foundAt"); j.statusAt = s(m, "statusAt"); j.note = s(m, "note");
+        j.followedUpAt = s(m, "followedUpAt"); j.noReminder = Json.bool(m.get("noReminder"), false);
         return j;
     }
 

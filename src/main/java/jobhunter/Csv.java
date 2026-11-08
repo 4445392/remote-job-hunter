@@ -11,7 +11,7 @@ final class Csv {
     /** Applied and Approved jobs, newest first. UTF-8 BOM so Excel shows accents; CRLF line ends. */
     static String applications(List<Job> jobs) {
         List<Job> rows = new ArrayList<>();
-        for (Job j : jobs) if (Job.APPLIED.equals(j.status) || Job.APPROVED.equals(j.status)) rows.add(j);
+        for (Job j : jobs) if (Job.APPLIED.equals(j.status) || Job.APPROVED.equals(j.status) || Job.REPLIED.equals(j.status)) rows.add(j);
         rows.sort((a, b) -> date(b).compareTo(date(a)));
         StringBuilder sb = new StringBuilder("﻿").append(HEADER).append("\r\n");
         for (Job j : rows) {
@@ -19,10 +19,14 @@ final class Csv {
               .append(cell(j.company)).append(',')
               .append(cell(j.title)).append(',')
               .append(cell(j.source)).append(',')
-              .append(cell(Job.APPLIED.equals(j.status) ? "Applied" : "Approved")).append(',')
+              .append(cell(label(j.status))).append(',')
               .append(cell(link(j))).append("\r\n");
         }
         return sb.toString();
+    }
+
+    static String label(String status) {
+        return Job.APPLIED.equals(status) ? "Applied" : Job.REPLIED.equals(status) ? "Replied" : "Approved";
     }
 
     /** The day the status last changed (when you clicked), else the day the job was found. */

@@ -90,7 +90,7 @@
 <script>
 const H = {'X-JobHunter': '1', 'Content-Type': 'application/json'};
 let JOBS = [], PLATS = [], TARGETS = [], STATE = {}, TAB = 'NEW';
-const TABS = [['NEW', 'Queue'], ['APPROVED', 'Approved'], ['APPLIED', 'Applied'], ['TARGETS', 'Job boards'], ['PLATFORMS', 'Platforms to join'], ['HIDDEN', 'Hidden']];
+const TABS = [['NEW', 'Queue'], ['APPROVED', 'Approved'], ['APPLIED', 'Applied'], ['FOLLOWUP', 'Follow up'], ['TARGETS', 'Job boards'], ['PLATFORMS', 'Platforms to join'], ['HIDDEN', 'Hidden']];
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -123,16 +123,23 @@ function fill(sel, vals, first) {
 }
 
 function render() {
-  $('tabs').innerHTML = TABS.map(([k, l]) => '<button class="' + (k === TAB ? 'on' : '') + '" data-tab="' + k + '">' + l + '</button>').join('');
+  const dueCount = JOBS.filter(j => j.followDue).length;
+  $('tabs').innerHTML = TABS.map(([k, l]) => '<button class="' + (k === TAB ? 'on' : '') + '" data-tab="' + k + '">' + l + (k === 'FOLLOWUP' && dueCount ? ' (' + dueCount + ')' : '') + '</button>').join('');
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.tab; render(); });
-  $('filters').style.display = TAB === 'PLATFORMS' || TAB === 'TARGETS' ? 'none' : '';
+  $('filters').style.display = TAB === 'PLATFORMS' || TAB === 'TARGETS' || TAB === 'FOLLOWUP' ? 'none' : '';
   const list = $('list');
   $('exportBar').style.display = TAB === 'APPLIED' ? '' : 'none';
   if (TAB === 'PLATFORMS') { list.innerHTML = renderPlatforms(); bindPlatforms(); return; }
   if (TAB === 'TARGETS') { list.innerHTML = renderTargets(); bindTargets(); return; }
+  if (TAB === 'FOLLOWUP') {
+    const due = JOBS.filter(j => j.followDue).sort((a, b) => (b.daysSince || 0) - (a.daysSince || 0));
+    list.innerHTML = due.length ? due.map(followCard).join('')
+      : '<div class="empty">No follow-ups due. Jobs you applied to 7 or more days ago with no reply show up here.</div>';
+    bindFollow(); return;
+  }
 
   const min = +$('minScore').value, type = $('typeSel').value, src = $('srcSel').value, q = $('q').value.toLowerCase();
-  const wanted = TAB === 'HIDDEN' ? ['REJECTED', 'BLOCKED'] : [TAB];
+  const wanted = TAB === 'HIDDEN' ? ['REJECTED', 'BLOCKED'] : TAB === 'APPLIED' ? ['APPLIED', 'REPLIED'] : [TAB];
   const rows = JOBS.filter(j => wanted.includes(j.status) && j.score >= min && (!type || j.workType === type) && (!src || j.source === src)
     && (!q || (j.title + ' ' + j.company).toLowerCase().includes(q)));
   if (!rows.length) {
@@ -154,7 +161,11 @@ function card(j) {
       + '<button data-a="applied">I applied</button><button data-a="skip">Skip</button>'
     : j.status === 'APPROVED'
       ? '<button class="primary" data-a="applied">I applied</button><button data-a="open">Open apply page</button>' + (j.email ? '<button data-a="mail">Email draft</button>' : '') + '<button data-a="skip">Skip</button>'
-      : '<button data-a="restore">Move back to queue</button>';
+      : j.status === 'APPLIED'
+        ? '<button class="primary" data-a="replied">They replied</button><button data-a="restore">Move back to queue</button>'
+        : j.status === 'REPLIED'
+          ? '<span class="chip">Replied</span><button data-a="restore">Move back to queue</button>'
+          : '<button data-a="restore">Move back to queue</button>';
   return '<div class="card" data-id="' + esc(j.id) + '">'
     + '<div class="top"><div class="score ' + cls + '">' + j.score + '</div><div style="flex:1;min-width:0">'
     + '<p class="title"><a href="' + esc(safeUrl(j.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(j.title) + '</a></p>'
@@ -168,6 +179,41 @@ function card(j) {
     + '<div class="desc">' + esc(j.description) + '</div></details>'
     + '<div class="actions">' + acts
     + '<button data-a="cv">Tailored CV</button><button data-a="reviews">Check reviews</button><button class="danger" data-a="block">Block employer</button></div></div>';
+}
+
+function followCard(j) {
+  const meta = [j.company, j.source, j.location].filter(Boolean).map(esc).join(' &middot; ');
+  return '<div class="card" data-id="' + esc(j.id) + '">'
+    + '<div class="top"><div class="score mid">' + esc(j.daysSince) + 'd</div><div style="flex:1;min-width:0">'
+    + '<p class="title"><a href="' + esc(safeUrl(j.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(j.title) + '</a></p>'
+    + '<div class="meta">' + meta + ' &middot; no reply for ' + esc(j.daysSince) + ' days</div></div></div>'
+    + '<textarea data-draft>' + esc(j.followDraft) + '</textarea>'
+    + '<div class="actions"><button class="primary" data-f="copy">Copy follow-up</button>'
+    + (j.email ? '<button data-f="mail">Email follow-up</button>' : '')
+    + '<button data-f="open">Open listing</button><button data-f="followed">I followed up</button>'
+    + '<button data-f="replied">They replied</button><button class="danger" data-f="stop">Stop reminding</button></div></div>';
+}
+
+function bindFollow() {
+  document.querySelectorAll('.card').forEach(c => {
+    const id = c.dataset.id, j = JOBS.find(x => x.id === id), ta = c.querySelector('[data-draft]');
+    c.querySelectorAll('[data-f]').forEach(b => b.onclick = () => followAct(b.dataset.f, j, ta));
+  });
+}
+
+async function followAct(a, j, ta) {
+  try {
+    if (a === 'copy') { await copy(ta.value); toast('Follow-up copied'); }
+    else if (a === 'mail') {
+      const m = ta.value.match(/^Subject:\s*(.*)\n+([\s\S]*)$/);
+      location.href = 'mailto:' + encodeURIComponent(j.email) + '?subject=' + encodeURIComponent(m ? m[1] : 'Following up: ' + j.title) + '&body=' + encodeURIComponent(m ? m[2] : ta.value);
+      toast('Check it, then press send in your mail app.');
+    }
+    else if (a === 'open') { window.open(safeUrl(j.applyUrl || j.url), '_blank', 'noopener'); }
+    else if (a === 'followed') { await api('/api/jobs/' + j.id + '/followed', 'POST', {}); toast('Next reminder in 7 days'); await load(); }
+    else if (a === 'replied') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'REPLIED'}); toast('Marked as replied'); await load(); }
+    else if (a === 'stop') { await api('/api/jobs/' + j.id + '/stopreminder', 'POST', {}); toast('No more reminders for this job'); await load(); }
+  } catch (e) { toast('Error: ' + e.message); }
 }
 
 function bind() {
@@ -197,6 +243,7 @@ async function act(a, j, ta) {
     }
     else if (a === 'applied') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'APPLIED'}); await load(); }
     else if (a === 'skip') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'REJECTED'}); await load(); }
+    else if (a === 'replied') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'REPLIED'}); toast('Marked as replied'); await load(); }
     else if (a === 'restore') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'NEW'}); await load(); }
     else if (a === 'cv') { window.open('/api/jobs/' + encodeURIComponent(j.id) + '/cv', '_blank', 'noopener'); }
     else if (a === 'reviews') {

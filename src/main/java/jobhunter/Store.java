@@ -86,6 +86,23 @@ final class Store {
         if (j == null) return false;
         j.status = status;
         j.statusAt = Instant.now().toString();
+        if (Job.APPLIED.equals(status)) { j.followedUpAt = ""; j.noReminder = false; }   // fresh 7-day clock
+        return true;
+    }
+
+    /** You sent a follow-up: restart the 7-day clock. */
+    synchronized boolean markFollowedUp(String id) {
+        Job j = jobs.get(id);
+        if (j == null) return false;
+        j.followedUpAt = Instant.now().toString();
+        return true;
+    }
+
+    /** "Stop reminding me" for this job. */
+    synchronized boolean stopReminders(String id) {
+        Job j = jobs.get(id);
+        if (j == null) return false;
+        j.noReminder = true;
         return true;
     }
 

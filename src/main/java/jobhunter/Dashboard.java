@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -137,12 +138,14 @@ final class Dashboard {
         switch (action) {
             case "status" -> {
                 String st = Json.str(body.get("status"));
-                if (!Set.of(Job.NEW, Job.APPROVED, Job.APPLIED, Job.REJECTED).contains(st)) {
+                if (!Set.of(Job.NEW, Job.APPROVED, Job.APPLIED, Job.REPLIED, Job.REJECTED).contains(st)) {
                     send(ex, 400, "text/plain", "Bad status");
                     return;
                 }
                 store.setStatus(id, st);
             }
+            case "followed" -> store.markFollowedUp(id);
+            case "stopreminder" -> store.stopReminders(id);
             case "draft" -> store.setDraft(id, Json.str(body.get("draft")) == null ? "" : Json.str(body.get("draft")));
             case "redraft" -> store.setDraft(id, pipeline.redraft(j, Json.bool(body.get("claude"), false)));
             default -> { send(ex, 404, "text/plain", "Unknown action"); return; }
@@ -181,6 +184,12 @@ final class Dashboard {
     private Map<String, Object> view(Job j) {
         Map<String, Object> m = j.view();
         if (profile.cv != null) m.put("cv", profile.cv.report(j, profile).toMap());
+        if (Job.APPLIED.equals(j.status)) {
+            Instant now = Instant.now();
+            m.put("followDue", FollowUp.isDue(j, now, FollowUp.DAYS));
+            m.put("daysSince", FollowUp.daysSince(j, now));
+            m.put("followDraft", FollowUp.draft(j, profile));
+        }
         return m;
     }
 

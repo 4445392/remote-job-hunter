@@ -49,6 +49,7 @@ public final class SelfTest {
         cvTests();
         boardTests();
         csvTests();
+        followUpTests();
         System.out.println(passed + " passed, " + failed + " failed");
         System.exit(failed > 0 ? 1 : 0);
     }
@@ -520,6 +521,93 @@ public final class SelfTest {
             check("csv endpoint has the job", r.body().contains("Endpoint job"));
         } finally { srv.stop(0); }
     }
+
+    static void followUpTests() throws Exception {
+        Instant now = Instant.parse("2026-11-20T12:00:00Z");
+        Job six = csvJob("Six", "A", Job.APPLIED, now.minus(6, ChronoUnit.DAYS).toString(), "https://a.example");
+        Job seven = csvJob("Seven", "B", Job.APPLIED, now.minus(7, ChronoUnit.DAYS).toString(), "https://b.example");
+        Job twenty = csvJob("Twenty", "C", Job.APPLIED, now.minus(20, ChronoUnit.DAYS).toString(), "https://c.example");
+        Job replied = csvJob("Replied", "D", Job.REPLIED, now.minus(30, ChronoUnit.DAYS).toString(), "https://d.example");
+        Job queued = csvJob("Queued", "E", Job.NEW, now.minus(30, ChronoUnit.DAYS).toString(), "https://e.example");
+        Job stopped = csvJob("Stopped", "F", Job.APPLIED, now.minus(30, ChronoUnit.DAYS).toString(), "https://f.example");
+        stopped.noReminder = true;
+        Job nodate = csvJob("NoDate", "G", Job.APPLIED, "", "https://g.example");
+        List<Job> due = FollowUp.due(List.of(six, seven, twenty, replied, queued, stopped, nodate), now, FollowUp.DAYS);
+        check("day 6 is not due", !FollowUp.isDue(six, now, 7));
+        check("day 7 is due", FollowUp.isDue(seven, now, 7));
+        eq("only applied, unreplied, not-stopped jobs are due", 2, due.size());
+        eq("longest wait first", "Twenty", due.get(0).title);
+        check("replied job never due", !FollowUp.isDue(replied, now, 7));
+        check("queued job never due", !FollowUp.isDue(queued, now, 7));
+        check("stopped job never due", !FollowUp.isDue(stopped, now, 7));
+        check("unknown date is not due", !FollowUp.isDue(nodate, now, 7));
+        eq("days since", 20, FollowUp.daysSince(twenty, now));
+        eq("days since unknown", -1, FollowUp.daysSince(nodate, now));
+
+        Job nudged = csvJob("Nudged", "H", Job.APPLIED, now.minus(30, ChronoUnit.DAYS).toString(), "https://h.example");
+        nudged.followedUpAt = now.minus(3, ChronoUnit.DAYS).toString();
+        check("follow-up restarts the clock", !FollowUp.isDue(nudged, now, 7));
+        nudged.followedUpAt = now.minus(8, ChronoUnit.DAYS).toString();
+        check("due again 7 days after a follow-up", FollowUp.isDue(nudged, now, 7));
+
+        String d = FollowUp.draft(seven, profile);
+        check("draft names the role", d.contains("the Seven position") && d.contains("Subject: Following up: Seven"));
+        check("draft names the company", d.contains("Hello B team,"));
+        check("draft has the day you applied", d.contains(Csv.date(seven)));
+        check("draft signs with your name", d.contains(profile.name));
+        check("draft invents no figures", !d.contains("$") && !d.contains("%") && !d.toLowerCase().contains("years of"));
+        Job web = csvJob("Role", "SomeBoard", Job.APPLIED, now.toString(), "https://x.example");
+        web.sourceType = "SEARCH";
+        check("search jobs get a plain greeting", FollowUp.draft(web, profile).contains("Hello,\n"));
+
+        Job rt = Job.fromMap(castMap(Json.parse(Json.write(nudged.toMap()))));
+        eq("followedUpAt survives save and load", nudged.followedUpAt, rt.followedUpAt);
+        Job rt2 = Job.fromMap(castMap(Json.parse(Json.write(stopped.toMap()))));
+        check("noReminder survives save and load", rt2.noReminder);
+
+        check("csv labels replied jobs", Csv.applications(List.of(replied)).contains("\"Replied\""));
+
+        // store + endpoints
+        Path tmp = Files.createTempDirectory("jh-fu");
+        Settings ss = new Settings(tmp, null, null, null, "m");
+        Store st = Store.load(ss.stateFile());
+        Job a = csvJob("Endpoint FU", "Eta", Job.APPLIED, Instant.now().minus(10, ChronoUnit.DAYS).toString(), "https://eta.example/1");
+        a.id = "fu1";
+        st.add(a);
+        st.markFollowedUp("fu1");
+        check("markFollowedUp sets the date", !st.get("fu1").followedUpAt.isBlank());
+        st.stopReminders("fu1");
+        check("stopReminders sets the flag", st.get("fu1").noReminder);
+        st.setStatus("fu1", Job.APPLIED);
+        check("applying again resets the clock", st.get("fu1").followedUpAt.isEmpty() && !st.get("fu1").noReminder);
+        st.get("fu1").statusAt = Instant.now().minus(10, ChronoUnit.DAYS).toString();   // pretend that was 10 days ago
+
+        Dashboard dash = new Dashboard(ss, profile, st, new Pipeline(ss, profile, st, new Http()));
+        HttpServer srv = dash.start(0);
+        try {
+            String base = "http://localhost:" + srv.getAddress().getPort();
+            HttpClient c = HttpClient.newHttpClient();
+            HttpResponse<String> noHdr = c.send(HttpRequest.newBuilder(URI.create(base + "/api/jobs/fu1/followed")).POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("followed without header refused", 403, noHdr.statusCode());
+            HttpResponse<String> noHdr2 = c.send(HttpRequest.newBuilder(URI.create(base + "/api/jobs/fu1/stopreminder")).POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("stopreminder without header refused", 403, noHdr2.statusCode());
+            check("nothing changed after refusals", st.get("fu1").followedUpAt.isEmpty() && !st.get("fu1").noReminder);
+
+            HttpResponse<String> list = c.send(HttpRequest.newBuilder(URI.create(base + "/api/jobs")).build(), HttpResponse.BodyHandlers.ofString());
+            check("job view says follow-up is due", list.body().contains("\"followDue\":true"));
+            check("job view carries a follow-up draft", list.body().contains("Following up: Endpoint FU"));
+
+            HttpResponse<String> done = c.send(HttpRequest.newBuilder(URI.create(base + "/api/jobs/fu1/followed")).header("X-JobHunter", "1").POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("followed with header ok", 200, done.statusCode());
+            check("followed hides it from the due list", done.body().contains("\"followDue\":false"));
+            HttpResponse<String> rep = c.send(HttpRequest.newBuilder(URI.create(base + "/api/jobs/fu1/status")).header("X-JobHunter", "1").POST(HttpRequest.BodyPublishers.ofString("{\"status\":\"REPLIED\"}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("replied status accepted", 200, rep.statusCode());
+            eq("job is replied", Job.REPLIED, st.get("fu1").status);
+        } finally { srv.stop(0); }
+    }
+
+    @SuppressWarnings("unchecked")
+    static Map<String, Object> castMap(Object o) { return (Map<String, Object>) o; }
 
     static void boardTests() {
         System.out.println("LinkedIn and Indeed");
