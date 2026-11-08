@@ -86,7 +86,7 @@ final class Dashboard {
                 send(ex, 200, "text/csv; charset=utf-8", Csv.applications(store.all()));
             } else if (method.equals("GET") && path.equals("/api/summary")) {
                 json(ex, Summary.weekly(store.all(), Instant.now(), 7,
-                        j -> profile.cv == null ? List.of() : profile.cv.report(j, profile).missing()));
+                        j -> profile.cv == null ? List.of() : cvReport(j).missing()));
             } else if (method.equals("GET") && path.equals("/api/platforms")) {
                 json(ex, platforms());
             } else if (method.equals("GET") && path.equals("/api/targets")) {
@@ -185,10 +185,17 @@ final class Dashboard {
         return out;
     }
 
+    /** A job's text never changes, so its keyword report is worked out once (the CV is read once at startup). */
+    private final Map<String, Cv.Report> reports = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private Cv.Report cvReport(Job j) {
+        return reports.computeIfAbsent(j.id, k -> profile.cv.report(j, profile));
+    }
+
     /** A job as the page sees it, plus how well your CV covers its keywords. */
     private Map<String, Object> view(Job j) {
         Map<String, Object> m = j.view();
-        if (profile.cv != null) m.put("cv", profile.cv.report(j, profile).toMap());
+        if (profile.cv != null) m.put("cv", cvReport(j).toMap());
         if (Job.APPLIED.equals(j.status)) {
             Instant now = Instant.now();
             m.put("followDue", FollowUp.isDue(j, now, FollowUp.DAYS));

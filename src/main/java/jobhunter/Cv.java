@@ -111,7 +111,21 @@ final class Cv {
     // ------------------------------------------------------------------ keywords
 
     /** All CV text in one lower-case string, used to check which job keywords you already cover. */
+    private String allTextCache;                    // the CV does not change while the program runs, so work it out once
+    private Profile vocabProfile;
+    private List<String> vocabCache;
+
     String allText() {
+        if (allTextCache == null) allTextCache = buildAllText();
+        return allTextCache;
+    }
+
+    private synchronized List<String> vocabularyFor(Profile p) {
+        if (vocabCache == null || vocabProfile != p) { vocabCache = vocabulary(p, this); vocabProfile = p; }
+        return vocabCache;
+    }
+
+    private String buildAllText() {
         StringBuilder b = new StringBuilder();
         summaries.values().forEach(x -> b.append(x).append(' '));
         headlines.values().forEach(x -> b.append(x).append(' '));
@@ -133,9 +147,11 @@ final class Cv {
         return new ArrayList<>(v);
     }
 
+    private static final Map<String, Pattern> PATTERNS = new java.util.concurrent.ConcurrentHashMap<>();
+
     static Pattern termPattern(String term) {
-        // word boundaries that also work for terms like "c++" or "ci/cd", plus simple plurals
-        return Pattern.compile("(?<![a-z0-9])" + Pattern.quote(Text.norm(term)) + "(?:s|es)?(?![a-z0-9])");
+        // word boundaries that also work for terms like "c++" or "ci/cd", plus simple plurals (compiled once per term)
+        return PATTERNS.computeIfAbsent(term, t -> Pattern.compile("(?<![a-z0-9])" + Pattern.quote(Text.norm(t)) + "(?:s|es)?(?![a-z0-9])"));
     }
 
     static boolean has(String normText, String term) {
@@ -149,7 +165,7 @@ final class Cv {
         String job = Text.norm(j.title + " " + String.join(" ", j.tags) + " " + j.description);
         String mine = allText();
         List<String> asked = new ArrayList<>(), matched = new ArrayList<>(), missing = new ArrayList<>();
-        for (String term : vocabulary(p, this)) {
+        for (String term : vocabularyFor(p)) {
             if (!termPattern(term).matcher(job).find()) continue;
             if (asked.stream().anyMatch(a -> a.contains(term) || term.contains(a))) continue;   // "sql" vs "mysql": count once
             asked.add(term);
