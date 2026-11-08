@@ -245,6 +245,58 @@ final class Cv {
         return h.toString();
     }
 
+    /**
+     * A plain-text cover letter for this job. Every sentence is copied from config/cv.json (summary, best-matching
+     * bullets and project, availability); only the greeting and the framing words are new. Gaps are never mentioned.
+     */
+    String coverLetter(Job j, Profile p, List<String> topGroups) {
+        Report rep = report(j, p);
+        List<String> terms = new ArrayList<>(rep.matched());
+        String top = topGroups.isEmpty() ? "default" : topGroups.get(0);
+        String role = j.title.isBlank() ? "this opportunity" : j.title;
+        String company = "SEARCH".equals(j.sourceType) || j.company.isBlank() ? null : j.company;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Subject: Application for ").append(role).append(" - ").append(p.name).append("\n\n");
+        sb.append(company == null ? "Hello," : "Hello " + company + " team,").append("\n\n");
+        sb.append("I am applying for ").append(j.title.isBlank() ? "this opportunity" : "the " + j.title + " position");
+        if (company != null) sb.append(" at ").append(company);
+        sb.append(".\n\n");
+
+        String summary = summaries.getOrDefault(top, summaries.getOrDefault("default", ""));
+        if (!summary.isBlank()) sb.append(summary).append("\n\n");
+
+        // the two bullets (across all roles) that best fit this job, then the best-fitting project
+        List<Bullet> all = new ArrayList<>();
+        for (Role r : experience) all.addAll(r.bullets);
+        all.sort(Comparator.comparingDouble((Bullet b) -> -(tagScore(b.tags, topGroups) * 3 + countTerms(b.text, terms))));
+        if (!all.isEmpty()) {
+            sb.append("Most relevant to this role:\n");
+            for (Bullet b : all.subList(0, Math.min(2, all.size()))) sb.append("- ").append(b.text).append("\n");
+            sb.append("\n");
+        }
+        List<Item> ps = new ArrayList<>(projects);
+        ps.sort(Comparator.comparingDouble((Item it) -> -(tagScore(it.tags, topGroups) * 3 + countTerms(it.name + " " + it.text, terms))));
+        if (!ps.isEmpty()) {
+            Item it = ps.get(0);
+            sb.append(it.name).append(": ").append(it.text);
+            if (!it.link.isBlank()) sb.append(" ").append(it.link);
+            sb.append("\n\n");
+        }
+
+        if (!rep.matched().isEmpty()) {
+            List<String> m = rep.matched().subList(0, Math.min(4, rep.matched().size()));
+            sb.append("Your listing mentions ").append(m.size() == 1 ? m.get(0)
+                    : String.join(", ", m.subList(0, m.size() - 1)) + " and " + m.get(m.size() - 1)).append(", which are on my CV.\n\n");
+        }
+        if (!availability.isBlank()) sb.append("Availability: ").append(availability).append(".\n\n");
+        sb.append("My CV is attached. Thank you for your time.\n\n");
+        sb.append(p.name).append("\n").append(p.email);
+        if (!p.phone.isBlank()) sb.append(" | ").append(p.phone);
+        sb.append("\n");
+        return sb.toString();
+    }
+
     private boolean placeholders() {
         for (Role r : experience) if (r.dates.contains("__")) return true;
         return false;

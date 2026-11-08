@@ -50,6 +50,7 @@ public final class SelfTest {
         boardTests();
         csvTests();
         followUpTests();
+        coverLetterTests();
         System.out.println(passed + " passed, " + failed + " failed");
         System.exit(failed > 0 ? 1 : 0);
     }
@@ -604,6 +605,48 @@ public final class SelfTest {
             eq("replied status accepted", 200, rep.statusCode());
             eq("job is replied", Job.REPLIED, st.get("fu1").status);
         } finally { srv.stop(0); }
+    }
+
+    static void coverLetterTests() throws Exception {
+        Cv cv = sampleCv();
+        Job dev = job("Junior Java Developer <b>", "Acme", "Remote", "We use Java, Spring Boot, MySQL and Docker. Unit testing is a plus.");
+        String l = cv.coverLetter(dev, profile, List.of("dev", "data"));
+        check("letter greets the company", l.contains("Hello Acme team,"));
+        check("letter names role and company", l.contains("the Junior Java Developer <b> position at Acme"));
+        check("letter uses the dev summary", l.contains("Dev summary") && !l.contains("Data summary"));
+        check("letter uses a relevant bullet", l.contains("Built a "));
+        check("letter names matched keywords", l.contains("which are on my CV") && l.toLowerCase().contains("java"));
+        check("letter never mentions a gap (docker)", !l.toLowerCase().contains("docker"));
+        check("letter ends with your name", l.contains(profile.name));
+        check("letter uses at most 2 bullets", l.lines().filter(x -> x.startsWith("- ")).count() <= 2);
+
+        Job data = job("Junior Data Analyst", "Zed", "Remote", "Excel, SQL and statistics. Dashboards.");
+        String ld = cv.coverLetter(data, profile, List.of("data"));
+        check("data letter uses the data summary", ld.contains("Data summary"));
+        check("data letter leads with the data bullet", ld.contains("R109,000"));
+        Job web = job("Role", "Board", "Remote", "Java");
+        web.sourceType = "SEARCH";
+        check("search jobs get a plain greeting", cv.coverLetter(web, profile, List.of("dev")).contains("Hello,\n"));
+
+        // endpoint: needs a CV, escapes the title, 404 for unknown jobs
+        Cv saved = profile.cv;
+        profile.cv = cv;
+        Path tmp = Files.createTempDirectory("jh-cl");
+        Settings ss = new Settings(tmp, null, null, null, "m");
+        Store st = Store.load(ss.stateFile());
+        Job j = job("Java <script>x</script> Dev", "Acme", "Remote", "Java and Spring Boot");
+        st.add(j);
+        HttpServer srv = new Dashboard(ss, profile, st, new Pipeline(ss, profile, st, new Http())).start(0);
+        try {
+            String base = "http://localhost:" + srv.getAddress().getPort();
+            HttpClient c = HttpClient.newHttpClient();
+            HttpResponse<String> r = c.send(HttpRequest.newBuilder(URI.create(base + "/api/jobs/" + j.id + "/cover")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("cover endpoint ok", 200, r.statusCode());
+            check("cover page has an editable box and copy button", r.body().contains("<textarea") && r.body().contains("Copy"));
+            check("cover page escapes the job title", !r.body().contains("<script>") && r.body().contains("&lt;script&gt;"));
+            HttpResponse<String> none = c.send(HttpRequest.newBuilder(URI.create(base + "/api/jobs/nope/cover")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("cover endpoint 404 for unknown job", 404, none.statusCode());
+        } finally { srv.stop(0); profile.cv = saved; }
     }
 
     @SuppressWarnings("unchecked")

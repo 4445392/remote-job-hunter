@@ -178,7 +178,7 @@ function card(j) {
     + (STATE.keys && STATE.keys.claude ? '<button data-a="claude">Polish with Claude</button>' : '') + '</div>'
     + '<div class="desc">' + esc(j.description) + '</div></details>'
     + '<div class="actions">' + acts
-    + '<button data-a="cv">Tailored CV</button><button data-a="reviews">Check reviews</button><button class="danger" data-a="block">Block employer</button></div></div>';
+    + '<button data-a="cv">Tailored CV</button><button data-a="cover">Cover letter</button><button data-a="reviews">Check reviews</button><button class="danger" data-a="block">Block employer</button></div></div>';
 }
 
 function followCard(j) {
@@ -245,6 +245,7 @@ async function act(a, j, ta) {
     else if (a === 'skip') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'REJECTED'}); await load(); }
     else if (a === 'replied') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'REPLIED'}); toast('Marked as replied'); await load(); }
     else if (a === 'restore') { await api('/api/jobs/' + j.id + '/status', 'POST', {status: 'NEW'}); await load(); }
+    else if (a === 'cover') { window.open('/api/jobs/' + encodeURIComponent(j.id) + '/cover', '_blank', 'noopener'); }
     else if (a === 'cv') { window.open('/api/jobs/' + encodeURIComponent(j.id) + '/cv', '_blank', 'noopener'); }
     else if (a === 'reviews') {
       const name = j.sourceType === 'SEARCH' ? j.company : '"' + j.company + '"';

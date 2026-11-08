@@ -90,6 +90,8 @@ final class Dashboard {
                 json(ex, targets());
             } else if (method.equals("GET") && path.startsWith("/api/jobs/") && path.endsWith("/cv")) {
                 tailoredCv(ex, path.substring("/api/jobs/".length(), path.length() - "/cv".length()));
+            } else if (method.equals("GET") && path.startsWith("/api/jobs/") && path.endsWith("/cover")) {
+                coverLetter(ex, path.substring("/api/jobs/".length(), path.length() - "/cover".length()));
             } else if (method.equals("POST") && path.equals("/api/manual")) {
                 Map<String, Object> b = body(ex);
                 Job j = new Job();
@@ -198,6 +200,23 @@ final class Dashboard {
         if (j == null) { send(ex, 404, "text/plain", "No such job"); return; }
         if (profile.cv == null) { send(ex, 404, "text/plain", "No config/cv.json yet: copy config/cv.example.json to config/cv.json and fill it in."); return; }
         send(ex, 200, "text/html; charset=utf-8", profile.cv.tailor(j, profile, pipeline.scoreOf(j).topGroups()));
+    }
+
+    /** A small page with the cover letter in an editable box and a Copy button. Nothing is sent anywhere. */
+    private void coverLetter(HttpExchange ex, String id) throws IOException {
+        Job j = store.get(id);
+        if (j == null) { send(ex, 404, "text/plain", "No such job"); return; }
+        if (profile.cv == null) { send(ex, 404, "text/plain", "No config/cv.json yet: copy config/cv.example.json to config/cv.json and fill it in."); return; }
+        String text = profile.cv.coverLetter(j, profile, pipeline.scoreOf(j).topGroups());
+        String page = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Cover letter - " + Cv.esc(j.title) + "</title>"
+                + "<style>body{font:15px system-ui,sans-serif;max-width:760px;margin:24px auto;padding:0 16px}textarea{width:100%;height:480px;font:inherit;padding:10px}"
+                + "button{padding:8px 14px;margin:8px 8px 0 0;cursor:pointer}</style></head><body>"
+                + "<h3>Cover letter for " + Cv.esc(j.title) + (j.company.isBlank() ? "" : " at " + Cv.esc(j.company)) + "</h3>"
+                + "<p>Built only from your CV data. Read it, edit it, then send it yourself.</p>"
+                + "<textarea id=\"t\">" + Cv.esc(text) + "</textarea><br>"
+                + "<button onclick=\"navigator.clipboard.writeText(document.getElementById('t').value)\">Copy</button>"
+                + "</body></html>";
+        send(ex, 200, "text/html; charset=utf-8", page);
     }
 
     private List<Object> targets() {
