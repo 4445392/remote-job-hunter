@@ -541,6 +541,11 @@ public final class SelfTest {
         check("google jobs off without key", !new Sources.GoogleJobs().enabled(new Settings(Path.of("."), null, null, null, "m")));
         check("google jobs on with key", new Sources.GoogleJobs().enabled(new Settings(Path.of("."), null, null, null, "m", "k")));
 
+        Object sb = Json.parse(Sources.serperBody("site:indeed.com \"AI\" OR java", "qdr:w"));
+        check("serper asks for 10 results (20 gets HTTP 400)", sb instanceof Map<?, ?> m && Double.valueOf(10).equals(((Number) m.get("num")).doubleValue()));
+        check("serper keeps time filter", sb instanceof Map<?, ?> m2 && "qdr:w".equals(m2.get("tbs")));
+        check("serper query survives quotes", sb instanceof Map<?, ?> m3 && "site:indeed.com \"AI\" OR java".equals(m3.get("q")));
+
         if (!profile.targets.isEmpty()) {
             List<String> qs = Sources.boardQueries(profile);
             eq("three queries per title", profile.targets.size() * 3, qs.size());

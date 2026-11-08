@@ -123,6 +123,13 @@ final class Sources {
         }
     }
 
+    /** Serper answers HTTP 400 to num=20 on site: and OR queries, so ask for 10 results (verified live). */
+    static String serperBody(String q, String tbs) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("q", q); body.put("num", 10); body.put("tbs", tbs);
+        return Json.write(body);
+    }
+
     static final class Serper implements Source {
         public String name() { return "Search:Google(Serper)"; }
         public int minIntervalMinutes() { return 720; }
@@ -132,10 +139,8 @@ final class Sources {
             int n = 0;
             for (String q : p.searchQueries) {
                 if (n++ >= p.maxSearchQueries) break;
-                Map<String, Object> body = new LinkedHashMap<>();
-                body.put("q", q); body.put("num", 20); body.put("tbs", "qdr:m");
                 out.addAll(parseSerper(http.postJson("https://google.serper.dev/search",
-                        Map.of("X-API-KEY", s.serperKey()), Json.write(body))));
+                        Map.of("X-API-KEY", s.serperKey()), serperBody(q, "qdr:m"))));
                 Thread.sleep(800);
             }
             return out;
@@ -158,9 +163,7 @@ final class Sources {
                 if (n++ >= p.maxBoardQueries * 3) break;
                 List<Job> found;
                 if (s.serperKey() != null) {
-                    Map<String, Object> body = new LinkedHashMap<>();
-                    body.put("q", q); body.put("num", 20); body.put("tbs", "qdr:w");     // past week
-                    found = parseSerper(http.postJson("https://google.serper.dev/search", Map.of("X-API-KEY", s.serperKey()), Json.write(body)));
+                    found = parseSerper(http.postJson("https://google.serper.dev/search", Map.of("X-API-KEY", s.serperKey()), serperBody(q, "qdr:w")));  // past week
                     Thread.sleep(800);
                 } else {
                     String url = "https://api.search.brave.com/res/v1/web/search?count=20&freshness=pw&q=" + URLEncoder.encode(q, StandardCharsets.UTF_8);
