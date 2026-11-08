@@ -82,6 +82,15 @@ flowchart LR
 - It **never invents** anything. It only re-orders and highlights what is in `config/cv.json`.
 - Blanks left as `__` (such as missing dates) are flagged in red on screen until you fill them in.
 
+## Tracking your applications
+
+- **Applied tab → Export to CSV**: your applications (date, company, title, source, status, link) as a file Excel opens.
+- **They replied**: marks a job as replied, so it stops counting as waiting.
+- **Follow up tab**: jobs you applied to 7 or more days ago with no reply, each with a short, plain follow-up draft. *I followed up* restarts the 7-day clock; *Stop reminding* ends it. Nothing is ever sent for you.
+- **Cover letter** button on every job: a plain-text letter built only from sentences already in `config/cv.json` (never mentions your gaps).
+- **This week tab**: jobs found, applied and replied in the last 7 days, your reply rate, best sources, and the keywords recent jobs asked for that your CV lacks (what to learn next).
+- The same job posted on several boards is recognised and shown once, even when the title or company is written slightly differently ("Sr. Dev (Remote)" and "Senior Developer").
+
 ## LinkedIn, Indeed, ZipRecruiter, Google Jobs and Handshake
 
 These sites block programs from reading their pages, and their rules forbid scraping. So the tool works with them in honest ways:
@@ -131,7 +140,7 @@ Optional: `ANTHROPIC_API_KEY` lets Claude polish drafts for the best-scoring job
 Zero dependencies, JDK only (`java.net.http`, `com.sun.net.httpserver`, `javax.xml`).
 
 ```bash
-./build.sh test    # compiles and runs 195 offline checks
+./build.sh test    # compiles and runs the offline self-tests (must end with 0 failed)
 ```
 
 ```
