@@ -25,7 +25,7 @@ final class Sources {
     private Sources() {}
 
     static List<Source> all() {
-        return List.of(new RemoteOk(), new Jobicy(), new Remotive(), new Himalayas(), new WeWorkRemotely(),
+        return List.of(new RemoteOk(), new Jobicy(), new Remotive(), new Himalayas(), new WeWorkRemotely(), new WorkingNomads(),
                 new Brave(), new Serper(), new BoardSearch(), new GoogleJobs());
     }
 
@@ -96,6 +96,19 @@ final class Sources {
             }
             if (out.isEmpty() && last != null) throw last;
             return out;
+        }
+    }
+
+    /**
+     * Working Nomads' public jobs feed (linked from their home page; robots.txt allows it). Their terms say nothing
+     * about it, so this is gentle: twice a day at most, with an honest User-Agent, personal use only. Each job links
+     * back to workingnomads.com and shows "Working Nomads" as its source.
+     */
+    static final class WorkingNomads implements Source {
+        public String name() { return "Working Nomads"; }
+        public int minIntervalMinutes() { return 720; }
+        public List<Job> fetch(Http http, Settings s, Profile p) throws Exception {
+            return parseWorkingNomads(http.get("https://www.workingnomads.com/api/exposed_jobs/", Map.of()));
         }
     }
 
@@ -373,6 +386,31 @@ final class Sources {
             if (lo == null && hi == null) { lo = Json.num(m.get("annualSalaryMin")); hi = Json.num(m.get("annualSalaryMax")); period = "yearly"; }
             j.minHourlyUsd = Pay.toHourly(lo, period, cur, fx);
             j.maxHourlyUsd = Pay.toHourly(hi, period, cur, fx);
+            if (j.title == null || j.title.isBlank()) continue;
+            out.add(j.finish());
+        }
+        return out;
+    }
+
+    /** Working Nomads: a plain JSON array; tags is one comma-separated string; pub_date has a UTC offset. No pay fields. */
+    static List<Job> parseWorkingNomads(String body) {
+        List<Job> out = new ArrayList<>();
+        for (Object o : Json.arr(Json.parse(body))) {
+            Map<String, Object> m = Json.obj(o);
+            Job j = new Job();
+            j.source = "Working Nomads";
+            j.title = Json.str(m.get("title"));
+            j.company = Json.str(m.get("company_name"));
+            j.url = Json.str(m.get("url"));
+            j.location = Json.str(m.get("location"));
+            j.description = Text.stripHtml(Json.str(m.get("description")));
+            j.tags = new ArrayList<>();
+            for (String t : Text.norm(Json.str(m.get("tags"))).split(",")) if (!t.isBlank()) j.tags.add(t.trim());
+            String cat = Json.str(m.get("category_name"));
+            if (cat != null && !cat.isBlank()) j.tags.add(cat.trim());
+            String raw = Json.str(m.get("pub_date"));
+            try { j.postedAt = java.time.OffsetDateTime.parse(raw).toInstant().toString(); }
+            catch (Exception e) { j.postedAt = iso(raw); }
             if (j.title == null || j.title.isBlank()) continue;
             out.add(j.finish());
         }

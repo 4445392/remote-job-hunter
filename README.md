@@ -12,7 +12,7 @@ So the program does the heavy lifting and **you only press one button per job.**
 
 ```mermaid
 flowchart LR
-    A[Job sources<br/>RemoteOK, Jobicy, Remotive,<br/>Himalayas, WeWorkRemotely,<br/>optional Google-style search] --> B[Skip jobs<br/>already seen]
+    A[Job sources<br/>RemoteOK, Jobicy, Remotive,<br/>Himalayas, WeWorkRemotely,<br/>Working Nomads,<br/>optional Google-style search] --> B[Skip jobs<br/>already seen]
     B --> C[Deal-breaker filter<br/>no fees, no fixed hours,<br/>no US/EU-only, no live calls]
     C --> D[Score 0 to 100<br/>against your skills]
     D --> E[Write the<br/>application draft]

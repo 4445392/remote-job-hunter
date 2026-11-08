@@ -53,6 +53,7 @@ public final class SelfTest {
         coverLetterTests();
         dedupeTests();
         summaryTests();
+        workingNomadsTests();
         System.out.println(passed + " passed, " + failed + " failed");
         System.exit(failed > 0 ? 1 : 0);
     }
@@ -607,6 +608,39 @@ public final class SelfTest {
             eq("replied status accepted", 200, rep.statusCode());
             eq("job is replied", Job.REPLIED, st.get("fu1").status);
         } finally { srv.stop(0); }
+    }
+
+    static void workingNomadsTests() throws Exception {
+        // src/test/resources/workingnomads.json is a trimmed copy of the real feed (6 jobs, descriptions cut to 500 chars)
+        String real = Files.readString(Path.of("src/test/resources/workingnomads.json"));
+        List<Job> js = Sources.parseWorkingNomads(real);
+        eq("working nomads: all jobs parsed", 6, js.size());
+        Job first = js.get(0);
+        eq("working nomads: title", "AI Content Reviewer, Video Annotation", first.title);
+        eq("working nomads: company", "iMerit Technology", first.company);
+        eq("working nomads: source name", "Working Nomads", first.source);
+        check("working nomads: links back to workingnomads.com", first.url.startsWith("https://www.workingnomads.com/"));
+        check("working nomads: html stripped", !first.description.contains("<p>") && first.description.contains("100% Remote"));
+        check("working nomads: comma tags split", first.tags.contains("annotation") && first.tags.contains("artificial intelligence"));
+        check("working nomads: category kept as a tag", first.tags.contains("Administration"));
+        eq("working nomads: date converted to UTC", "2026-11-05T08:10:45Z", first.postedAt);
+        check("working nomads: location kept", first.location.contains("Switzerland"));
+        check("working nomads: id set", !first.id.isEmpty());
+        check("working nomads: ids are unique", js.stream().map(j -> j.id).distinct().count() == js.size());
+
+        eq("working nomads: empty feed", 0, Sources.parseWorkingNomads("[]").size());
+        List<Job> odd = Sources.parseWorkingNomads("[{\"title\":\"\",\"url\":\"https://x.example/a\"},"
+                + "{\"title\":\"No tags or date\",\"url\":\"https://x.example/b\",\"company_name\":\"Z\",\"tags\":\"\",\"pub_date\":\"not a date\"}]");
+        eq("working nomads: job without a title skipped", 1, odd.size());
+        check("working nomads: empty tags and bad date do not crash", odd.get(0).tags.isEmpty() && odd.get(0).postedAt.equals("not a date"));
+        boolean threw = false;
+        try { Sources.parseWorkingNomads("not json"); } catch (Exception e) { threw = true; }
+        check("working nomads: broken response raises an error (the run logs it and carries on)", threw);
+
+        Source src = Sources.all().stream().filter(s -> s.name().equals("Working Nomads")).findFirst().orElse(null);
+        check("working nomads: registered as a source", src != null);
+        check("working nomads: fetched at most twice a day", src != null && src.minIntervalMinutes() >= 720);
+        check("working nomads: needs no key", src != null && src.enabled(new Settings(Path.of("."), null, null, null, "m")));
     }
 
     static void summaryTests() throws Exception {

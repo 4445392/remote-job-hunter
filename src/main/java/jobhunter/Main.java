@@ -95,7 +95,8 @@ public final class Main {
                 {"Jobicy", "https://jobicy.com/api/v2/remote-jobs?count=1"},
                 {"Remotive", "https://remotive.com/api/remote-jobs?limit=1"},
                 {"Himalayas", "https://himalayas.app/jobs/api?limit=1"},
-                {"WeWorkRemotely", "https://weworkremotely.com/remote-jobs.rss"}};
+                {"WeWorkRemotely", "https://weworkremotely.com/remote-jobs.rss"},
+                {"Working Nomads", "https://www.workingnomads.com/api/exposed_jobs/"}};
         for (String[] c : checks) {
             try {
                 String body = http.get(c[1], Map.of());
