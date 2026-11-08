@@ -83,6 +83,7 @@
   <select id="srcSel"><option value="">All sources</option></select>
   <input type="search" id="q" placeholder="Search title or company">
 </div>
+<div id="exportBar" style="display:none;margin:8px 0"><a href="/api/export.csv" download="applications.csv"><button type="button">Export applications to CSV (Excel)</button></a></div>
 <main id="list"></main>
 <div class="toast" id="toast"></div>
 
@@ -126,6 +127,7 @@ function render() {
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.tab; render(); });
   $('filters').style.display = TAB === 'PLATFORMS' || TAB === 'TARGETS' ? 'none' : '';
   const list = $('list');
+  $('exportBar').style.display = TAB === 'APPLIED' ? '' : 'none';
   if (TAB === 'PLATFORMS') { list.innerHTML = renderPlatforms(); bindPlatforms(); return; }
   if (TAB === 'TARGETS') { list.innerHTML = renderTargets(); bindTargets(); return; }
 

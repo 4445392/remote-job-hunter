@@ -48,6 +48,7 @@ public final class SelfTest {
         dashboardTests();
         cvTests();
         boardTests();
+        csvTests();
         System.out.println(passed + " passed, " + failed + " failed");
         System.exit(failed > 0 ? 1 : 0);
     }
@@ -471,6 +472,53 @@ public final class SelfTest {
             check("no target bonus for a nurse job", sc.targetFor(job("Registered Nurse", "H", "", "")) == null);
             check("POS match does not hit 'position'", sc.targetFor(job("Position available: chef", "H", "", "")) == null);
         }
+    }
+
+    static Job csvJob(String title, String company, String status, String at, String url) {
+        Job j = new Job();
+        j.title = title; j.company = company; j.source = "RemoteOK"; j.url = url; j.applyUrl = url;
+        j.status = status; j.statusAt = at; j.foundAt = "2026-01-01T00:00:00Z";
+        return j;
+    }
+
+    static void csvTests() throws Exception {
+        List<Job> js = new ArrayList<>();
+        js.add(csvJob("Java Dev", "Acme, Inc", Job.APPLIED, "2026-11-01T10:00:00Z", "https://acme.example/1"));
+        js.add(csvJob("=HYPERLINK(\"http://evil\")", "Beta \"B\"", Job.APPLIED, "2026-11-05T10:00:00Z", "javascript:alert(1)"));
+        js.add(csvJob("Approved one", "Gamma", Job.APPROVED, "2026-11-03T10:00:00Z", "http://g.example/x"));
+        js.add(csvJob("Still new", "Delta", Job.NEW, "", "https://d.example"));
+        js.add(csvJob("Hidden", "Eps", Job.REJECTED, "2026-11-02T10:00:00Z", "https://e.example"));
+        String out = Csv.applications(js);
+        String[] lines = out.split("\r\n");
+        check("csv starts with BOM for Excel", out.startsWith("﻿"));
+        eq("csv header", Csv.HEADER, lines[0].substring(1));
+        eq("csv has only applied and approved rows", 4, lines.length);
+        check("csv newest first", lines[1].startsWith("\"2026-11-05\"") && lines[3].startsWith("\"2026-11-01\""));
+        check("csv commas stay inside quotes", out.contains("\"Acme, Inc\""));
+        check("csv inner quotes doubled", out.contains("\"Beta \"\"B\"\"\""));
+        check("csv formula title defused", out.contains("\"'=HYPERLINK(") && !out.contains(",\"=HYPERLINK"));
+        check("csv drops non-http link", !out.contains("javascript:"));
+        check("csv keeps http link", out.contains("\"https://acme.example/1\""));
+        check("csv status labels", out.contains("\"Applied\"") && out.contains("\"Approved\""));
+        check("csv leaves out new and hidden", !out.contains("Delta") && !out.contains("Eps"));
+        eq("csv falls back to found date", "2026-01-01", Csv.date(csvJob("t", "c", Job.APPLIED, "", "https://x.example")));
+        check("csv newline in title flattened", Csv.cell("a\nb").equals("\"a b\""));
+
+        // endpoint: served as a download, header present, local-only Host check still applies
+        Path tmp = Files.createTempDirectory("jh-csv");
+        Settings ss = new Settings(tmp, null, null, null, "m");
+        Store st = Store.load(ss.stateFile());
+        st.add(csvJob("Endpoint job", "Zeta", Job.APPLIED, "2026-11-06T10:00:00Z", "https://z.example/1"));
+        Dashboard d = new Dashboard(ss, profile, st, new Pipeline(ss, profile, st, new Http()));
+        HttpServer srv = d.start(0);
+        try {
+            int port = srv.getAddress().getPort();
+            HttpResponse<String> r = HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/export.csv")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("csv endpoint ok", 200, r.statusCode());
+            check("csv endpoint is a download", r.headers().firstValue("Content-Disposition").orElse("").contains("applications.csv"));
+            check("csv endpoint content type", r.headers().firstValue("Content-Type").orElse("").startsWith("text/csv"));
+            check("csv endpoint has the job", r.body().contains("Endpoint job"));
+        } finally { srv.stop(0); }
     }
 
     static void boardTests() {
