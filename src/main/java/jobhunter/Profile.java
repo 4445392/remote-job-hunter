@@ -22,7 +22,10 @@ final class Profile {
     List<String> searchQueries = new ArrayList<>();
     List<Target> targets = new ArrayList<>();
     int maxBoardQueries = 10;
-    Cv cv;                                         // config/cv.json, if present (used for tailored CVs)
+    // simple gigs (UGC, clipping, posting, micro-tasks, referrals): what pays out to South Africa, and how much a weekly run may spend
+    List<String> gigPayoutMethods = new ArrayList<>(List.of("PayPal", "Payoneer", "Wise", "Bank transfer"));
+    int gigMaxQueriesPerRun = 40, gigMaxPagesPerRun = 25, gigMaxReviewChecks = 15, gigIntervalMinutes = 10080;
+    Cv cv;                                        // config/cv.json, if present (used for tailored CVs)
     boolean upfrontFees = true, fixedHours = true, mandatoryCalls = true, geoLocked = true, unpaidWork = true;
 
     static Profile load(Path file) throws IOException {
@@ -65,6 +68,12 @@ final class Profile {
         p.blockedEmployers = Json.strings(m.get("blockedEmployers"));
         p.searchQueries = Json.strings(m.get("searchQueries"));
         p.maxBoardQueries = i(m.get("maxBoardQueries"), 10);
+        List<String> gm = Json.strings(m.get("gigPayoutMethods"));
+        if (!gm.isEmpty()) p.gigPayoutMethods = gm;
+        p.gigMaxQueriesPerRun = i(m.get("gigMaxQueriesPerRun"), 40);
+        p.gigMaxPagesPerRun = i(m.get("gigMaxPagesPerRun"), 25);
+        p.gigMaxReviewChecks = i(m.get("gigMaxReviewChecks"), 15);
+        p.gigIntervalMinutes = i(m.get("gigIntervalMinutes"), 10080);
         for (Object o : Json.arr(m.get("targetTitles"))) {
             Map<String, Object> t = Json.obj(o);
             String title = d(t, "title", "");

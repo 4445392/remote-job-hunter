@@ -61,6 +61,18 @@ public final class Main {
                 System.out.println("Searching every " + hours + " hours. Dashboard: http://localhost:" + port + "   (Ctrl+C to stop)");
                 Thread.currentThread().join();
             }
+            case "gigs" -> {
+                GigPipeline gp = new GigPipeline(settings, profile, store, http);
+                Map<String, Object> sum = gp.run();
+                System.out.println(Json.pretty(sum));
+                List<Gig> best = new ArrayList<>();
+                for (Gig g : store.allGigs()) if (!g.status.equals(Gig.REJECTED)) best.add(g);
+                best.sort((a, b) -> b.rank() - a.rank());
+                System.out.println("\nBest simple gigs (fit, risk, South Africa):");
+                for (Gig g : best.subList(0, Math.min(Integer.parseInt(opts.getOrDefault("n", "15")), best.size())))
+                    System.out.printf("  fit %3d  risk %2d/10  SA:%-9s %s  %s%n", g.fit, g.risk, g.eligibility, g.name, g.url);
+                System.out.println("\nReview them in the dashboard: java -jar jobhunter.jar serve   (Simple Gigs tab)");
+            }
             case "top" -> top(store, Integer.parseInt(opts.getOrDefault("n", "15")));
             case "doctor" -> doctor(settings, profile, http);
             default -> {
@@ -129,6 +141,7 @@ public final class Main {
                   java -jar jobhunter.jar daemon [--every-hours 3] [--port N]
                                                               dashboard plus automatic searching, keep this running
                   java -jar jobhunter.jar top [--n 15]        print the best jobs in the queue
+                  java -jar jobhunter.jar gigs [--n 15]       search for simple online gigs now (uses about 55 search credits)
 
                 Options: --home <folder> if you run it from somewhere other than the project folder.
                 Optional keys (environment variables): BRAVE_API_KEY, SERPER_API_KEY, SERPAPI_KEY, ANTHROPIC_API_KEY

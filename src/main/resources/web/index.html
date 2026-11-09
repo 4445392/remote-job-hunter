@@ -90,8 +90,8 @@
 
 <script>
 const H = {'X-JobHunter': '1', 'Content-Type': 'application/json'};
-let JOBS = [], PLATS = [], TARGETS = [], STATE = {}, SUMMARY = null, TAB = 'NEW';
-const TABS = [['NEW', 'Queue'], ['APPROVED', 'Approved'], ['APPLIED', 'Applied'], ['FOLLOWUP', 'Follow up'], ['SUMMARY', 'This week'], ['TARGETS', 'Job boards'], ['PLATFORMS', 'Platforms to join'], ['HIDDEN', 'Hidden']];
+let JOBS = [], PLATS = [], TARGETS = [], STATE = {}, SUMMARY = null, GIGS = [], SHOW_ALL_GIGS = false, TAB = 'NEW';
+const TABS = [['NEW', 'Queue'], ['APPROVED', 'Approved'], ['APPLIED', 'Applied'], ['FOLLOWUP', 'Follow up'], ['SUMMARY', 'This week'], ['GIGS', 'Simple Gigs'], ['TARGETS', 'Job boards'], ['PLATFORMS', 'Platforms to join'], ['HIDDEN', 'Hidden']];
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -105,7 +105,7 @@ async function api(path, method = 'GET', body) {
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2400); }
 
 async function load() {
-  [STATE, JOBS, PLATS, TARGETS, SUMMARY] = await Promise.all([api('/api/state'), api('/api/jobs'), api('/api/platforms'), api('/api/targets'), api('/api/summary')]);
+  [STATE, JOBS, PLATS, TARGETS, SUMMARY, GIGS] = await Promise.all([api('/api/state'), api('/api/jobs'), api('/api/platforms'), api('/api/targets'), api('/api/summary'), api('/api/gigs')]);
   const by = (STATE.stats || {}).byStatus || {};
   $('stNew').textContent = (by.NEW || 0) + ' new';
   $('stApproved').textContent = (by.APPROVED || 0) + ' approved';
@@ -125,14 +125,15 @@ function fill(sel, vals, first) {
 
 function render() {
   const dueCount = JOBS.filter(j => j.followDue).length;
-  $('tabs').innerHTML = TABS.map(([k, l]) => '<button class="' + (k === TAB ? 'on' : '') + '" data-tab="' + k + '">' + l + (k === 'FOLLOWUP' && dueCount ? ' (' + dueCount + ')' : '') + '</button>').join('');
+  $('tabs').innerHTML = TABS.map(([k, l]) => '<button class="' + (k === TAB ? 'on' : '') + '" data-tab="' + k + '">' + l + (k === 'FOLLOWUP' && dueCount ? ' (' + dueCount + ')' : '') + (k === 'GIGS' && GIGS.filter(g => g.status === 'NEW').length ? ' (' + GIGS.filter(g => g.status === 'NEW').length + ')' : '') + '</button>').join('');
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { TAB = b.dataset.tab; render(); });
-  $('filters').style.display = ['PLATFORMS', 'TARGETS', 'FOLLOWUP', 'SUMMARY'].includes(TAB) ? 'none' : '';
+  $('filters').style.display = ['PLATFORMS', 'TARGETS', 'FOLLOWUP', 'SUMMARY', 'GIGS'].includes(TAB) ? 'none' : '';
   const list = $('list');
   $('exportBar').style.display = TAB === 'APPLIED' ? '' : 'none';
   if (TAB === 'PLATFORMS') { list.innerHTML = renderPlatforms(); bindPlatforms(); return; }
   if (TAB === 'TARGETS') { list.innerHTML = renderTargets(); bindTargets(); return; }
   if (TAB === 'SUMMARY') { list.innerHTML = renderSummary(); return; }
+  if (TAB === 'GIGS') { list.innerHTML = renderGigs(); bindGigs(); return; }
   if (TAB === 'FOLLOWUP') {
     const due = JOBS.filter(j => j.followDue).sort((a, b) => (b.daysSince || 0) - (a.daysSince || 0));
     list.innerHTML = due.length ? due.map(followCard).join('')
@@ -197,6 +198,100 @@ function renderSummary() {
     + (s.sources.length ? '<table><tr><th align="left">Source</th><th align="left">Found</th><th align="left">Applied</th><th align="left">Replied</th></tr>' + rows(s.sources, ['source', 'found', 'applied', 'replied']) + '</table>' : '<div class="meta">Nothing yet.</div>') + '</div>'
     + '<div class="card"><p class="title">What to learn next</p><div class="meta">Keywords that recent jobs asked for and your CV does not have. Add one to config/cv.json only if it is true for you.</div>'
     + (s.gaps.length ? '<table><tr><th align="left">Keyword</th><th align="left">Jobs asking</th></tr>' + rows(s.gaps, ['keyword', 'jobs']) + '</table>' : '<div class="meta">No gaps in recent jobs.</div>') + '</div>';
+}
+
+const GIG_CAT = {UGC: 'UGC / short-form creator', CLIPPING: 'Content clipping', POSTING_VA: 'Social media posting / VA', AI_MICRO: 'AI training / micro-tasks', REFERRAL: 'Paid referrals', OTHER: 'Online gig'};
+const GIG_PAY = {RETAINER: 'Monthly retainer', PER_VIEW: 'Per-view bonus', PER_TASK: 'Pay per task', REFERRAL: 'Referral rewards'};
+
+function renderGigs() {
+  const busy = STATE.gigsRunning, can = STATE.gigsEnabled;
+  const shown = GIGS.filter(g => SHOW_ALL_GIGS || ['NEW', 'APPROVED', 'JOINED'].includes(g.status));
+  const hidden = GIGS.length - GIGS.filter(g => ['NEW', 'APPROVED', 'JOINED'].includes(g.status)).length;
+  const bar = '<div class="card"><p class="title">Simple Gigs</p>'
+    + '<div class="meta">UGC and short-form creator programs, clipping, social media posting and VA tasks, AI micro-tasks and paid referrals. Ranked by fit, then low risk, with South Africa confirmed first. '
+    + 'Nothing here is verified for you: read each platform\'s own terms before you share any details, and never pay to join.</div>'
+    + '<div class="actions"><button class="primary" data-g="run"' + (busy || !can ? ' disabled' : '') + '>' + (busy ? 'Searching...' : 'Search for gigs now') + '</button>'
+    + '<label style="margin-left:8px"><input type="checkbox" id="showAllGigs"' + (SHOW_ALL_GIGS ? ' checked' : '') + '> Show rejected and skipped (' + hidden + ')</label></div>'
+    + '<div class="meta">' + (can ? 'Runs by itself once a week (about 55 search credits). A manual search costs the same.' : 'Needs a search key: set SERPER_API_KEY or BRAVE_API_KEY.') + '</div></div>';
+  if (!shown.length) return bar + '<div class="empty">No gigs yet. ' + (can ? 'Press <b>Search for gigs now</b>; it takes a few minutes.' : '') + '</div>';
+  return bar + shown.map(gigCard).join('');
+}
+
+function gigCard(g) {
+  const fitCls = g.fit >= 70 ? 'hi' : g.fit >= 50 ? 'mid' : 'lo';
+  const chip = (txt, bg) => '<span class="chip"' + (bg ? ' style="background:' + bg + ';color:#fff"' : '') + '>' + esc(txt) + '</span>';
+  const elig = g.eligibility === 'OK' ? chip('South Africa: OK', '#1f6f43') : g.eligibility === 'EXCLUDED' ? chip('South Africa: no', '#a33') : chip('South Africa: unconfirmed', '#9a6a00');
+  const risk = chip('Risk ' + g.risk + '/10', g.risk >= 7 ? '#a33' : g.risk >= 4 ? '#9a6a00' : '#1f6f43');
+  const unv = g.unverified ? chip('Unverified', '#555') : '';
+  const val = v => v && String(v).length ? esc(v) : '<span class="meta">not stated</span>';
+  const methods = (g.payoutMethods || []).join(', ');
+  const rows = [
+    ['What you do', g.whatYouDo],
+    ['Pay model', (g.payModels || []).map(m => GIG_PAY[m] || m).join(' + ')],
+    ['Payout', [g.payoutThreshold ? 'minimum ' + g.payoutThreshold : '', methods].filter(Boolean).join(' · ')],
+    ['Needs', g.requirements],
+    ['Countries', g.eligibilityWhy],
+    ['Cost to join', g.costToJoin === 'FREE' ? 'Free' : g.costToJoin === 'PAID' ? 'Costs money (be careful)' : ''],
+    ['Hours', g.hours],
+    ['Support', g.support]
+  ].map(([k, v]) => '<tr><td style="padding:2px 12px 2px 0;white-space:nowrap" class="meta">' + k + '</td><td>' + val(v) + '</td></tr>').join('');
+  const ev = Object.entries(g.evidence || {}).map(([k, v]) => '<li><b>' + esc(k) + ':</b> ' + esc(v) + '</li>').join('');
+  const reasons = (g.riskReasons || []).concat(g.goodSigns || []).map(r => '<li>' + esc(r) + '</li>').join('');
+  const found = (g.foundVia || []).length ? '<div class="meta">Found by: ' + (g.foundVia || []).slice(0, 3).map(esc).join(' · ') + '</div>' : '';
+  const acts = g.status === 'NEW'
+    ? '<button class="primary" data-g="approve">Approve &amp; open sign-up</button><button data-g="joined">I joined</button><button data-g="skip">Skip</button><button data-g="recheck">Re-check</button>'
+    : g.status === 'APPROVED'
+      ? '<button class="primary" data-g="joined">I joined</button><button data-g="open">Open sign-up</button><button data-g="skip">Skip</button><button data-g="recheck">Re-check</button>'
+      : '<span class="chip">' + esc(g.status.toLowerCase()) + '</span><button data-g="restore">Move back to the list</button><button data-g="recheck">Re-check</button>';
+  return '<div class="card" data-gid="' + esc(g.id) + '">'
+    + '<div class="top"><div class="score ' + fitCls + '" title="Fit score">' + g.fit + '</div><div style="flex:1;min-width:0">'
+    + '<p class="title"><a href="' + esc(safeUrl(g.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(g.name) + '</a></p>'
+    + '<div class="meta">' + esc(g.domain) + '</div>'
+    + '<div class="chips">' + chip(GIG_CAT[g.category] || g.category) + elig + risk + unv + (g.pageFetched ? '' : chip('page not read')) + '</div>'
+    + '<div class="why">Why it fits you: ' + esc(g.whyFits) + '</div>'
+    + (g.hardRejects && g.hardRejects.length ? '<div class="flag">&#9888; Rejected: ' + g.hardRejects.map(esc).join('; ') + '</div>' : '')
+    + (g.status === 'REJECTED' && g.eligibility === 'EXCLUDED' ? '<div class="flag">&#9888; ' + esc(g.eligibilityWhy) + '</div>' : '')
+    + '<table style="margin-top:6px">' + rows + '</table>' + found
+    + '</div></div>'
+    + '<details><summary>Risk score ' + g.risk + '/10: the reasons</summary><ul>' + reasons + '</ul></details>'
+    + (ev ? '<details><summary>Where each fact came from</summary><ul>' + ev + '</ul></details>' : '')
+    + '<details><summary>Sign-up message draft</summary><textarea data-draft>' + esc(g.draft) + '</textarea>'
+    + '<div class="actions"><button data-g="copy">Copy draft</button><button data-g="save">Save edits</button></div></details>'
+    + '<div class="actions">' + acts + '</div></div>';
+}
+
+function bindGigs() {
+  const all = $('showAllGigs');
+  if (all) all.onchange = () => { SHOW_ALL_GIGS = all.checked; render(); };
+  document.querySelectorAll('[data-g="run"]').forEach(b => b.onclick = () => gigAct('run', null, null));
+  document.querySelectorAll('.card[data-gid]').forEach(c => {
+    const g = GIGS.find(x => x.id === c.dataset.gid), ta = c.querySelector('[data-draft]');
+    c.querySelectorAll('[data-g]').forEach(b => b.onclick = () => gigAct(b.dataset.g, g, ta));
+  });
+}
+
+async function gigAct(a, g, ta) {
+  try {
+    const set = async st => { await api('/api/gigs/' + g.id + '/status', 'POST', {status: st}); await load(); };
+    if (a === 'run') {
+      const r = await api('/api/gigs/run', 'POST', {});
+      toast(r.started ? 'Searching for gigs... this takes a few minutes.' : 'A gig search is already running.');
+      for (let i = 0; i < 180; i++) { await new Promise(r => setTimeout(r, 10000)); await load(); if (!STATE.gigsRunning) break; }
+    }
+    else if (a === 'copy') { await copy(ta.value); toast('Draft copied'); }
+    else if (a === 'save') { await api('/api/gigs/' + g.id + '/draft', 'POST', {draft: ta.value}); toast('Saved'); await load(); }
+    else if (a === 'approve') {
+      await copy(ta.value);
+      window.open(safeUrl(g.url), '_blank', 'noopener');
+      await set('APPROVED');
+      toast('Draft copied. Read their terms before you share any details, and never pay to join.');
+    }
+    else if (a === 'open') { window.open(safeUrl(g.url), '_blank', 'noopener'); }
+    else if (a === 'joined') await set('JOINED');
+    else if (a === 'skip') await set('SKIPPED');
+    else if (a === 'restore') await set('NEW');
+    else if (a === 'recheck') { toast('Re-checking...'); await api('/api/gigs/' + g.id + '/recheck', 'POST', {}); await load(); toast('Re-checked'); }
+  } catch (e) { toast('Error: ' + e.message); }
 }
 
 function followCard(j) {

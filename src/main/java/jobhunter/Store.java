@@ -10,6 +10,7 @@ import java.util.*;
 final class Store {
     private final Path file;
     private final Map<String, Job> jobs = new LinkedHashMap<>();
+    private final Map<String, Gig> gigs = new LinkedHashMap<>();                // simple-gig platforms, keyed by domain hash
     private final Map<String, String> seen = new LinkedHashMap<>();        // id or dupKey -> why it was skipped / "kept"
     private final Map<String, String> sourceRuns = new LinkedHashMap<>();  // source name -> ISO time of last fetch
     private final Set<String> blocked = new LinkedHashSet<>();              // lower-case employer names
@@ -25,6 +26,10 @@ final class Store {
             for (Object o : Json.arr(root.get("jobs"))) {
                 Job j = Job.fromMap(Json.obj(o));
                 if (!j.id.isEmpty()) s.jobs.put(j.id, j);
+            }
+            for (Object o : Json.arr(root.get("gigs"))) {
+                Gig g = Gig.fromMap(Json.obj(o));
+                if (!g.id.isEmpty()) s.gigs.put(g.id, g);
             }
             for (Map.Entry<String, Object> e : Json.obj(root.get("seen")).entrySet()) s.seen.put(e.getKey(), Json.str(e.getValue()));
             for (Map.Entry<String, Object> e : Json.obj(root.get("sourceRuns")).entrySet()) s.sourceRuns.put(e.getKey(), Json.str(e.getValue()));
@@ -42,6 +47,9 @@ final class Store {
         List<Object> list = new ArrayList<>();
         for (Job j : jobs.values()) list.add(j.toMap());
         root.put("jobs", list);
+        List<Object> gigList = new ArrayList<>();
+        for (Gig g : gigs.values()) gigList.add(g.toMap());
+        root.put("gigs", gigList);
         // keep the "seen" memory bounded
         Map<String, String> s = seen;
         if (s.size() > 20000) {
@@ -112,6 +120,31 @@ final class Store {
         Job j = jobs.get(id);
         if (j == null) return false;
         j.draft = draft;
+        return true;
+    }
+
+    // ----- simple gigs -----
+
+    synchronized Gig gig(String id) { return gigs.get(id); }
+
+    synchronized List<Gig> allGigs() { return new ArrayList<>(gigs.values()); }
+
+    synchronized void putGig(Gig g) { gigs.put(g.id, g); }
+
+    synchronized boolean hasGigDomain(String domain) { return gigs.containsKey(Gig.idFor(domain)); }
+
+    synchronized boolean setGigStatus(String id, String status) {
+        Gig g = gigs.get(id);
+        if (g == null) return false;
+        g.status = status;
+        g.statusAt = Instant.now().toString();
+        return true;
+    }
+
+    synchronized boolean setGigDraft(String id, String draft) {
+        Gig g = gigs.get(id);
+        if (g == null) return false;
+        g.draft = draft;
         return true;
     }
 

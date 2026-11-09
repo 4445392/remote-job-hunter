@@ -23,6 +23,8 @@ final class Dashboard {
     private final Store store;
     private final Pipeline pipeline;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicBoolean gigRunning = new AtomicBoolean(false);
+    private GigPipeline gigPipeline;
     private int port;
 
     Dashboard(Settings settings, Profile profile, Store store, Pipeline pipeline) {
@@ -30,7 +32,11 @@ final class Dashboard {
         this.profile = profile;
         this.store = store;
         this.pipeline = pipeline;
+        this.gigPipeline = new GigPipeline(settings, profile, store, new Http());
     }
+
+    /** Lets tests (or a future caller) swap in a gig pipeline that uses a different HTTP client. */
+    void setGigPipeline(GigPipeline g) { this.gigPipeline = g; }
 
     HttpServer start(int port) throws IOException {
         // bind to the loopback address only: nobody else on the network can reach it
@@ -52,10 +58,27 @@ final class Dashboard {
         Thread t = new Thread(() -> {
             try {
                 pipeline.run();
+                if (gigRunning.compareAndSet(false, true)) {          // the weekly gig search rides along; it only runs when due
+                    try { gigPipeline.runIfDue(); } catch (Exception e) { System.err.println("Gig search failed: " + e.getMessage()); }
+                    finally { gigRunning.set(false); }
+                }
             } finally {
                 running.set(false);
             }
         }, "job-run");
+        t.setDaemon(true);
+        t.start();
+        return true;
+    }
+
+    /** Starts a gig search now (ignores the weekly timer) unless one is already going. */
+    boolean triggerGigRun() {
+        if (!gigRunning.compareAndSet(false, true)) return false;
+        Thread t = new Thread(() -> {
+            try { gigPipeline.run(); }
+            catch (Exception e) { System.err.println("Gig search failed: " + e.getMessage()); }
+            finally { gigRunning.set(false); }
+        }, "gig-run");
         t.setDaemon(true);
         t.start();
         return true;
@@ -84,6 +107,12 @@ final class Dashboard {
             } else if (method.equals("GET") && path.equals("/api/export.csv")) {
                 ex.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"applications.csv\"");
                 send(ex, 200, "text/csv; charset=utf-8", Csv.applications(store.all()));
+            } else if (method.equals("GET") && path.equals("/api/gigs")) {
+                json(ex, gigs());
+            } else if (method.equals("POST") && path.equals("/api/gigs/run")) {
+                json(ex, Map.of("started", triggerGigRun()));
+            } else if (method.equals("POST") && path.startsWith("/api/gigs/")) {
+                gigAction(ex, path);
             } else if (method.equals("GET") && path.equals("/api/summary")) {
                 json(ex, Summary.weekly(store.all(), Instant.now(), 7,
                         j -> profile.cv == null ? List.of() : cvReport(j).missing()));
@@ -133,6 +162,36 @@ final class Dashboard {
         }
     }
 
+    /** Gigs ranked best first: fit, minus risk, with South Africa confirmed ahead. Rejected ones are included so the page can show why. */
+    private List<Object> gigs() {
+        List<Gig> all = store.allGigs();
+        all.sort((a, b) -> b.rank() - a.rank());
+        List<Object> out = new ArrayList<>();
+        for (Gig g : all) out.add(g.toMap());
+        return out;
+    }
+
+    private void gigAction(HttpExchange ex, String path) throws Exception {
+        String[] parts = path.split("/");           // "", "api", "gigs", id, action
+        if (parts.length != 5) { send(ex, 404, "text/plain", "Not found"); return; }
+        String id = parts[3], action = parts[4];
+        Gig g = store.gig(id);
+        if (g == null) { send(ex, 404, "text/plain", "No such gig"); return; }
+        Map<String, Object> body = body(ex);
+        switch (action) {
+            case "status" -> {
+                String st = Json.str(body.get("status"));
+                if (!Set.of(Gig.NEW, Gig.APPROVED, Gig.JOINED, Gig.SKIPPED).contains(st)) { send(ex, 400, "text/plain", "Bad status"); return; }
+                store.setGigStatus(id, st);
+            }
+            case "draft" -> store.setGigDraft(id, Json.str(body.get("draft")) == null ? "" : Json.str(body.get("draft")));
+            case "recheck" -> gigPipeline.recheck(id);
+            default -> { send(ex, 404, "text/plain", "Unknown action"); return; }
+        }
+        store.save();
+        json(ex, store.gig(id).toMap());
+    }
+
     private void jobAction(HttpExchange ex, String path) throws Exception {
         String[] parts = path.split("/");           // "", "api", "jobs", id, action
         if (parts.length != 5) { send(ex, 404, "text/plain", "Not found"); return; }
@@ -166,6 +225,8 @@ final class Dashboard {
         m.put("name", profile.name);
         m.put("threshold", profile.scoreThreshold);
         m.put("running", running.get());
+        m.put("gigsRunning", gigRunning.get());
+        m.put("gigsEnabled", gigPipeline.enabled());
         m.put("lastRun", store.lastRun());
         m.put("stats", store.stats());
         Map<String, Object> keys = new LinkedHashMap<>();

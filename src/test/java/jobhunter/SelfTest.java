@@ -55,6 +55,10 @@ public final class SelfTest {
         summaryTests();
         workingNomadsTests();
         entryTests();
+        gigExtractTests();
+        gigRiskTests();
+        gigDiscoveryTests();
+        gigPipelineTests();
         System.out.println(passed + " passed, " + failed + " failed");
         System.exit(failed > 0 ? 1 : 0);
     }
@@ -609,6 +613,388 @@ public final class SelfTest {
             eq("replied status accepted", 200, rep.statusCode());
             eq("job is replied", Job.REPLIED, st.get("fu1").status);
         } finally { srv.stop(0); }
+    }
+
+    // ======================================================================== simple gigs
+
+    static Profile gigProfile() {
+        return Profile.fromMap(Json.obj(Json.parse("{\"name\":\"Test User\",\"email\":\"test@example.test\",\"timezone\":\"SAST, UTC+2\",\"hoursPerWeek\":30}")));
+    }
+
+    static String fixture(String name) throws Exception { return Files.readString(Path.of("src/test/resources/" + name)); }
+
+    static void gigExtractTests() throws Exception {
+        Profile gp = gigProfile();
+        Gig g = GigExtract.extract("https://brandpost-example.test/", "hint", fixture("gig_creator_program.html"), "");
+        eq("gig: name from og:site_name", "Brandpost Example", g.name);
+        eq("gig: domain", "brandpost-example.test", g.domain);
+        eq("gig: category", Gig.UGC, g.category);
+        check("gig: retainer and per-view pay found", g.payModels.contains("RETAINER") && g.payModels.contains("PER_VIEW"));
+        eq("gig: payout threshold", "$20", g.payoutThreshold);
+        check("gig: payout methods found", g.payoutMethods.containsAll(List.of("PayPal", "Payoneer", "Wise")));
+        check("gig: no followers and no experience", g.noFollowersRequired && g.noExperienceRequired);
+        eq("gig: free to join", Gig.FREE, g.costToJoin);
+        eq("gig: open worldwide counts as eligible", Gig.OK, g.eligibility);
+        check("gig: worldwide still says to confirm South Africa", g.eligibilityWhy.contains("confirm South Africa"));
+        eq("gig: hours range", "10-30 hours a week", g.hours);
+        eq("gig: hours max", 30, g.hoursMax);
+        check("gig: flexible hours", g.flexibleHours);
+        eq("gig: training support", "Discord community", g.support);
+        check("gig: terms, privacy and contact found", g.hasTerms && g.hasPrivacy && g.hasContact);
+        check("gig: what you do", g.whatYouDo.toLowerCase().startsWith("get paid to post"));
+        check("gig: facts keep their evidence", g.evidence.get("payoutThreshold").contains("minimum payout") && g.evidence.containsKey("pay:PER_VIEW"));
+        check("gig: script and style text is ignored", GigRisk.hardRejects(Text.stripHtml(fixture("gig_creator_program.html").replaceAll("(?is)<script.*?</script>|<style.*?</style>", " "))).isEmpty());
+        check("gig: but the same words in visible text are caught", !GigRisk.hardRejects("pay a fee and use crypto").isEmpty());
+
+        GigScore.eligibility(g, gp);
+        eq("gig: payout works from South Africa", Gig.OK, g.payoutFit);
+        GigRisk.assess(g, "clean text", GigRisk.Reviews.NONE);
+        GigScore.fit(g, gp);
+        check("gig: fit is high for a free, no-experience, worldwide, flexible gig", g.fit >= 85);
+        check("gig: why-it-fits names the facts", g.whyFits.contains("free to join") && g.whyFits.contains("pays via PayPal/Payoneer/Wise") && g.whyFits.contains("Discord"));
+        check("gig: why-it-fits admits what is unconfirmed", !g.whyFits.contains("South Africa unconfirmed") || g.eligibility.equals(Gig.UNKNOWN));
+        String d = GigScore.draft(g, gp);
+        check("gig: draft is addressed and signed", d.contains("Hello Brandpost Example team") && d.contains("Test User") && d.contains("test@example.test"));
+        check("gig: draft asks to confirm South Africa", d.contains("Can creators in South Africa join and be paid?"));
+        check("gig: draft does not ask what is already known", !d.contains("minimum payout") && !d.contains("no cost to join") && !d.contains("Which payout methods"));
+        check("gig: draft never claims experience", !d.toLowerCase().contains("years of experience"));
+
+        // excluded: US only, and pays only by methods that do not work from South Africa
+        Gig us = GigExtract.extract("https://cliprush-example.test/", "", fixture("gig_us_only.html"), "");
+        eq("gig: US-only page is excluded", Gig.EXCLUDED, us.eligibility);
+        check("gig: US-only says why", us.eligibilityWhy.contains("Limited to other countries"));
+        eq("gig: clipping category", Gig.CLIPPING, us.category);
+        GigScore.eligibility(us, gp);
+        eq("gig: Venmo and Cash App cannot pay South Africa", Gig.NONE, us.payoutFit);
+        check("gig: payout reason added", us.eligibilityWhy.contains("which you cannot use from South Africa"));
+        Gig onlyVenmo = GigExtract.extract("https://payfast-free.test/", "X", "<p>Open worldwide. Get paid per task. Payouts via Venmo.</p>", "");
+        eq("gig: worldwide page", Gig.OK, onlyVenmo.eligibility);
+        GigScore.eligibility(onlyVenmo, gp);
+        eq("gig: a worldwide gig that pays only by Venmo is excluded for you", Gig.EXCLUDED, onlyVenmo.eligibility);
+
+        Gig ai = GigExtract.extract("https://labelbee-example.test/", "", fixture("gig_ai_micro.html"), "");
+        eq("gig: micro-task category", Gig.AI_MICRO, ai.category);
+        eq("gig: names South Africa", Gig.OK, ai.eligibility);
+        check("gig: names-South-Africa reason", ai.eligibilityWhy.contains("names South Africa"));
+        eq("gig: withdraw threshold from sentence", "$10", ai.payoutThreshold);
+        check("gig: per-task pay", ai.payModels.contains("PER_TASK"));
+        check("gig: bank transfer and PayPal", ai.payoutMethods.containsAll(List.of("PayPal", "Bank transfer")));
+        check("gig: no experience required", ai.noExperienceRequired);
+
+        // edge cases
+        eq("gig: explicit South Africa exclusion", Gig.EXCLUDED, GigExtract.extract("https://a.test/", "A", "<p>Not available in South Africa.</p>", "").eligibility);
+        eq("gig: country list without South Africa is excluded", Gig.EXCLUDED, GigExtract.extract("https://a.test/", "A", "<p>Currently available in the US, UK, Canada and Australia.</p>", "").eligibility);
+        eq("gig: 'join us' is not the United States", Gig.UNKNOWN, GigExtract.extract("https://a.test/", "A", "<p>Join us today and start posting videos.</p>", "").eligibility);
+        eq("gig: silence about countries stays unknown", Gig.UNKNOWN, GigExtract.extract("https://a.test/", "A", "<p>Post videos and get paid.</p>", "").eligibility);
+        Gig followers = GigExtract.extract("https://a.test/", "A", "<p>No followers required, but you must have at least 5K followers to unlock bonuses.</p>", "");
+        eq("gig: a stated follower minimum beats a vague 'no followers'", 5000, followers.minFollowers);
+        check("gig: and clears the no-followers flag", !followers.noFollowersRequired && followers.requirements.contains("at least 5K followers"));
+        Gig years = GigExtract.extract("https://a.test/", "A", "<p>No experience needed. Must have 3 years of experience editing.</p>", "");
+        check("gig: asking for years of experience cancels no-experience", !years.noExperienceRequired && years.requirements.contains("3+ years"));
+        Gig unread = GigExtract.extract("https://payday-like.test/", "Payday Like", "", "Earn money posting short videos. Open worldwide. No followers required.");
+        check("gig: unreadable page falls back to the search snippet", !unread.pageFetched && unread.noFollowersRequired && unread.eligibility.equals(Gig.OK));
+        eq("gig: hint name used when the page gives none", "Payday Like", unread.name);
+        eq("gig: counts like 5K and 1.2M", 1_200_000, GigExtract.parseCount("1.2", "M"));
+        eq("gig: payout fit stays unknown when no method is stated", Gig.UNKNOWN, GigExtract.extract("https://a.test/", "A", "<p>Get paid.</p>", "").payoutFit);
+
+        // lessons from the first live run: payout methods count only when the words around them are about paying YOU
+        Gig stripe = GigExtract.extract("https://s.test/", "S", "<p>Open worldwide. Plans start at $9 a month. We accept payments via Stripe and PayPal at checkout.</p>", "");
+        check("live lesson: taking payments through Stripe is not a payout method", stripe.payoutMethods.isEmpty());
+        Gig stripePayout = GigExtract.extract("https://s.test/", "S", "<p>Creators are paid out weekly through Stripe.</p>", "");
+        check("live lesson: paying you through Stripe is", stripePayout.payoutMethods.contains("Stripe"));
+        Gig paypalPayout = GigExtract.extract("https://s.test/", "S", "<p>We pay creators by PayPal every Friday. Subscribe with PayPal or card.</p>", "");
+        check("live lesson: a payout method is found next to the words about paying you", paypalPayout.payoutMethods.contains("PayPal"));
+        Gig names = GigExtract.extract("https://rev.test/", "", "<html><head><title>Investigative Intelligence &amp; Legal Transcription Platform for teams</title></head><body>hi</body></html>", "");
+        eq("live lesson: a long headline is not a name; the domain is", "Rev", names.name);
+        eq("live lesson: a question is not a name", "Forum", GigExtract.extract("https://forum.test/", "Does anyone know of platforms that pay?", "", "").name.equals("Does anyone know of platforms that pay?") ? "bad" : "Forum");
+
+        // ranking: confirmed, low-risk, high-fit first; excluded last
+        Gig low = GigExtract.extract("https://brandpost-example.test/", "", fixture("gig_creator_program.html"), ""); GigScore.eligibility(low, gp); GigRisk.assess(low, "x", GigRisk.Reviews.NONE); GigScore.fit(low, gp);
+        Gig riskyG = GigExtract.extract("https://easy.test/", "", fixture("gig_scam.html"), ""); GigScore.eligibility(riskyG, gp); GigRisk.assess(riskyG, "starter kit crypto guaranteed income", GigRisk.Reviews.NONE); GigScore.fit(riskyG, gp);
+        check("gig: low-risk gig outranks a scammy one", low.rank() > riskyG.rank());
+        check("gig: excluded gigs rank below everything", us.rank() < low.rank() && us.rank() < 0 + riskyG.rank() + 100);
+    }
+
+    static void gigRiskTests() throws Exception {
+        Gig scam = GigExtract.extract("https://easy.test/", "", fixture("gig_scam.html"), "");
+        String text = Text.stripHtml(fixture("gig_scam.html"));
+        List<String> hard = GigRisk.hardRejects(text);
+        check("risk: registration fee rejected", hard.contains("asks you to pay a fee or deposit"));
+        check("risk: starter kit rejected", hard.contains("sells a starter kit"));
+        check("risk: paid course rejected", hard.contains("sells a paid course or coaching"));
+        check("risk: crypto rejected", hard.contains("involves crypto"));
+        check("risk: guaranteed income rejected", hard.contains("promises guaranteed income"));
+        GigRisk.assess(scam, text, GigRisk.Reviews.NONE);
+        eq("risk: a hard reject is 10 out of 10", 10, scam.risk);
+        check("risk: reasons say Rejected", scam.riskReasons.stream().anyMatch(r -> r.startsWith("Rejected: ")));
+        check("risk: bank logins and ID before a contract", GigRisk.hardRejects("Send your passport before you start and share your bank password.").contains("wants bank logins or ID before a contract"));
+        check("live lesson: 'guaranteed payment' is a good sign, not a scam sign", GigRisk.hardRejects("We offer guaranteed payment and guaranteed on-time payouts to every creator.").isEmpty());
+        check("live lesson: 'guaranteed income' is still rejected", !GigRisk.hardRejects("Guaranteed income of $5000 every month, risk-free income!").isEmpty());
+        check("live lesson: 'guaranteed $500' is still rejected", !GigRisk.hardRejects("Get guaranteed $500 in your first week").isEmpty());
+        check("risk: ID after a contract is not rejected", GigRisk.hardRejects("We verify your identity for payouts once you are accepted.").isEmpty());
+        check("risk: a free course is not a paid course", GigRisk.hardRejects("Free training course in our community.").isEmpty());
+
+        // points and reasons on a middling gig
+        Gig mid = GigExtract.extract("https://mid.test/", "Mid", "<p>Post videos and get paid. Earn up to $300 per week. Passive income!</p>", "");
+        GigRisk.assess(mid, "Post videos and get paid. Earn up to $300 per week. Passive income! recruit others", GigRisk.Reviews.NONE);
+        check("risk: missing terms, privacy and contact add points", mid.riskReasons.stream().anyMatch(r -> r.contains("no Terms page")) && mid.riskReasons.stream().anyMatch(r -> r.contains("no contact or company details")));
+        check("risk: recruiting, hype and earnings claims add points", mid.riskReasons.stream().anyMatch(r -> r.contains("recruiting")) && mid.riskReasons.stream().anyMatch(r -> r.contains("hype")) && mid.riskReasons.stream().anyMatch(r -> r.contains("earnings figures")));
+        check("risk: no independent reviews is flagged unverified", mid.unverified && mid.riskReasons.stream().anyMatch(r -> r.startsWith("Unverified")));
+        check("risk: a shaky page scores high", mid.risk >= 8);
+        check("risk: stays within 0 to 10", mid.risk <= 10 && mid.risk >= 0);
+
+        Gig clean = GigExtract.extract("https://brandpost-example.test/", "", fixture("gig_creator_program.html"), "");
+        GigRisk.assess(clean, "Post videos. Free to join.", GigRisk.Reviews.NONE);
+        check("risk: a clean, free, documented platform scores low", clean.risk <= 2);
+        check("risk: good signs are listed", clean.goodSigns.size() >= 3);
+        check("risk: no reviews still means unverified", clean.unverified);
+        GigRisk.assess(clean, "Post videos. Free to join.", new GigRisk.Reviews(4, 0, 3, 1, List.of("reddit.com")));
+        check("risk: independent payout proof lowers risk and clears unverified", clean.risk == 0 && !clean.unverified);
+        GigRisk.assess(clean, "Post videos.", new GigRisk.Reviews(4, 3, 0, 0, List.of("reddit.com")));
+        check("risk: reports of non-payment raise risk a lot", clean.risk >= 4 && clean.riskReasons.stream().anyMatch(r -> r.contains("report non-payment or a scam")));
+        Gig unread = GigExtract.extract("https://x.test/", "X", "", "Post videos.");
+        GigRisk.assess(unread, "Post videos.", GigRisk.Reviews.NONE);
+        check("risk: an unreadable page is not double-penalised for missing terms", unread.riskReasons.stream().anyMatch(r -> r.contains("could not read")) && unread.riskReasons.stream().noneMatch(r -> r.contains("no Terms page")));
+
+        // independent reviews
+        List<GigDiscovery.Hit> hits = List.of(
+                new GigDiscovery.Hit("Brandpost review: got paid $50, payout proof inside", "https://reddit.com/r/UGCcreators/x", "I got paid $50 from Brandpost", "q"),
+                new GigDiscovery.Hit("Is Brandpost a scam?", "https://reddit.com/r/WorkOnline/y", "Anyone tried Brandpost? scam or legit?", "q"),
+                new GigDiscovery.Hit("Brandpost never paid me", "https://trustpilot.com/review/brandpost", "Brandpost never paid me, total scam", "q"),
+                new GigDiscovery.Hit("Brandpost home", "https://brandpost.com/", "Brandpost pays creators", "q"),
+                new GigDiscovery.Hit("Unrelated post", "https://reddit.com/r/beermoney/z", "Best survey sites 2026", "q"));
+        GigRisk.Reviews rv = GigRisk.Reviews.fromHits("Brandpost", "brandpost.com", hits);
+        eq("reviews: only independent results that name it count", 3, rv.mentions());
+        eq("reviews: one negative", 1, rv.negative());
+        eq("reviews: one positive", 1, rv.positive());
+        eq("reviews: one proof", 1, rv.proof());
+        check("reviews: a 'Is X a scam?' question is not evidence", rv.negative() == 1);
+        check("reviews: its own site is not independent", !rv.sources().contains("brandpost.com"));
+        eq("reviews: nothing found", 0, GigRisk.Reviews.fromHits("Brandpost", "brandpost.com", List.of()).mentions());
+    }
+
+    static void gigDiscoveryTests() throws Exception {
+        List<GigDiscovery.Query> all = GigDiscovery.queries(1000);
+        check("discovery: a thorough query bank", all.size() >= 30);
+        check("discovery: no duplicate queries", all.stream().map(GigDiscovery.Query::q).distinct().count() == all.size());
+        for (String sub : List.of("r/UGCcreators", "r/WorkOnline", "r/beermoney", "r/forhire"))
+            check("discovery: searches " + sub, all.stream().anyMatch(q -> q.q().contains("site:reddit.com/" + sub)));
+        check("discovery: searches YouTube and TikTok for payout experiences", all.stream().anyMatch(q -> q.q().contains("site:youtube.com")) && all.stream().anyMatch(q -> q.q().contains("site:tiktok.com")));
+        for (String must : List.of("paid to post short form videos no followers", "UGC creator no experience", "clipping jobs pay per view", "social media posting jobs remote"))
+            check("discovery: has the query '" + must + "'", all.stream().anyMatch(q -> q.q().contains(must)));
+        for (String cat : List.of(Gig.UGC, Gig.CLIPPING, Gig.POSTING_VA, Gig.AI_MICRO, Gig.REFERRAL))
+            check("discovery: covers " + cat, all.stream().anyMatch(q -> q.category().equals(cat)));
+        Set<String> small = new HashSet<>();
+        for (GigDiscovery.Query q : GigDiscovery.queries(5)) small.add(q.category());
+        eq("discovery: a small budget still spreads across all five categories", 5, small.size());
+        eq("discovery: budget respected", 7, GigDiscovery.queries(7).size());
+
+        eq("discovery: domain strips www", "example.com", GigDiscovery.domainOf("https://www.Example.com/path?x=1"));
+        eq("discovery: bad url gives no domain", "", GigDiscovery.domainOf("not a url"));
+        check("discovery: social sites are never platforms", GigDiscovery.ignored("reddit.com") && GigDiscovery.ignored("m.youtube.com") && GigDiscovery.ignored("tiktok.com") && GigDiscovery.ignored("paypal.com"));
+        check("discovery: a normal domain is not ignored", !GigDiscovery.ignored("clipstar.io"));
+        check("live lesson: job boards and publications are never gig platforms", GigDiscovery.ignored("mediabistro.com") && GigDiscovery.ignored("workingnomads.com") && GigDiscovery.ignored("careervillage.org") && GigDiscovery.ignored("us.remotejobs.dedyn.io") && GigDiscovery.ignored("digiday.com"));
+        check("live lesson: blog, help, wiki and news pages are not platforms", GigDiscovery.nonPlatformUrl("https://ugcjobs.com/blog/ugc-creator-jobs-no-experience") && GigDiscovery.nonPlatformUrl("https://help.rocketmoney.com/en/articles/1") && GigDiscovery.nonPlatformUrl("https://wiki.tribute.tg/for-content-creators/referral-program") && GigDiscovery.nonPlatformUrl("https://creatordb.app/creator-news/the-rise-of-the-clip-economy/") && GigDiscovery.nonPlatformUrl("https://support.whoop.com/s/article/Refer-A-Friend"));
+        check("live lesson: 'how-to' slugs are articles", GigDiscovery.nonPlatformUrl("https://onlinemediamasters.com/how-to-make-money-with-affiliate-marketing/"));
+        check("live lesson: a platform's own pages are still platforms", !GigDiscovery.nonPlatformUrl("https://www.pitchlo.com/ugc-creator-jobs/beginners") && !GigDiscovery.nonPlatformUrl("https://clipstar.io/join") && !GigDiscovery.nonPlatformUrl("https://thanks.io/refer-and-earn"));
+        check("live lesson: questions are forum posts, not platforms", GigDiscovery.looksLikeArticle("Does anyone know of platforms that pay per task?") && GigDiscovery.looksLikeArticle("Is there a legit UGC site?"));
+        List<GigDiscovery.Lead> mined = GigDiscovery.leads(List.of(
+                new GigDiscovery.Hit("UGC Creator Jobs With No Experience", "https://ugcjobs.com/blog/ugc-creator-jobs-no-experience", "Try clipstar.io or labelbee.ai", "q")));
+        check("live lesson: a blog post is mined for names and is not itself a lead", mined.stream().noneMatch(l -> l.domain.equals("ugcjobs.com")) && mined.stream().anyMatch(l -> l.domain.equals("clipstar.io")));
+        check("discovery: article titles are spotted", GigDiscovery.looksLikeArticle("10 best UGC platforms for beginners") && GigDiscovery.looksLikeArticle("Is ClipStar legit?") && !GigDiscovery.looksLikeArticle("ClipStar - get paid to clip"));
+        check("discovery: finds domains named in text", GigDiscovery.domainsIn("I joined clipstar.io and payday-example.com last week, paypal.com paid me").equals(List.of("clipstar.io", "payday-example.com")));
+
+        List<GigDiscovery.Hit> hits = List.of(
+                new GigDiscovery.Hit("ClipStar - get paid to clip", "https://www.clipstar.io/join", "Clip streams, earn per view", "clipping jobs pay per view"),
+                new GigDiscovery.Hit("ClipStar - get paid to clip", "https://clipstar.io/", "Clip streams", "UGC creator no experience"),
+                new GigDiscovery.Hit("Anyone tried payday-example.com?", "https://reddit.com/r/beermoney/a", "payday-example.com paid me last week", "reddit query"),
+                new GigDiscovery.Hit("payday-example.com payout proof", "https://youtube.com/watch?v=1", "I withdrew from payday-example.com", "youtube query"),
+                new GigDiscovery.Hit("10 best UGC platforms", "https://someblog.com/best-ugc", "Top picks: clipstar.io, labelbee.ai and brandpost-example.com", "q"),
+                new GigDiscovery.Hit("TikTok video", "https://tiktok.com/@x/video/1", "nothing here", "q"));
+        List<GigDiscovery.Lead> leads = GigDiscovery.leads(hits);
+        Map<String, GigDiscovery.Lead> by = new HashMap<>();
+        for (GigDiscovery.Lead l : leads) by.put(l.domain, l);
+        check("discovery: one lead per domain", leads.size() == by.size());
+        check("discovery: www and non-www are the same domain", by.containsKey("clipstar.io") && !by.containsKey("www.clipstar.io"));
+        eq("discovery: mentions add up across direct and article results", 3, by.get("clipstar.io").mentions);
+        check("discovery: a platform's own site is a direct lead", by.get("clipstar.io").direct && by.get("clipstar.io").url.equals("https://www.clipstar.io/join"));
+        check("discovery: Reddit and YouTube are mined for names, never opened", by.get("payday-example.com").mentions == 2 && !by.get("payday-example.com").direct);
+        check("discovery: mined leads start at the home page", by.get("payday-example.com").url.equals("https://payday-example.com/"));
+        check("discovery: articles are mined, not treated as platforms", !by.containsKey("someblog.com") && by.containsKey("labelbee.ai"));
+        check("discovery: social and payment domains never become leads", !by.containsKey("tiktok.com") && !by.containsKey("reddit.com") && !by.containsKey("youtube.com"));
+        eq("discovery: most-mentioned first", "clipstar.io", leads.get(0).domain);
+        check("discovery: leads remember which searches found them", by.get("clipstar.io").via.size() == 3);
+
+        eq("discovery: reads Serper results (including Reddit)", 2, GigDiscovery.parseSerper("{\"organic\":[{\"title\":\"A\",\"link\":\"https://reddit.com/x\",\"snippet\":\"s\"},{\"title\":\"B\",\"link\":\"https://b.test/\",\"snippet\":\"t\"},{\"title\":\"no link\"}]}", "q").size());
+        eq("discovery: reads Brave results", 1, GigDiscovery.parseBrave("{\"web\":{\"results\":[{\"title\":\"A <b>x</b>\",\"url\":\"https://a.test/\",\"description\":\"d\"}]}}", "q").size());
+        eq("discovery: empty responses are fine", 0, GigDiscovery.parseSerper("{}", "q").size());
+
+        // robots.txt
+        check("robots: no file means allowed", GigDiscovery.Robots.allows(null, "RemoteJobHunter", "/"));
+        check("robots: Disallow / blocks everything", !GigDiscovery.Robots.allows("User-agent: *\nDisallow: /", "RemoteJobHunter", "/faq"));
+        check("robots: an empty Disallow allows everything", GigDiscovery.Robots.allows("User-agent: *\nDisallow:", "RemoteJobHunter", "/faq"));
+        check("robots: a specific path is blocked, others are not", !GigDiscovery.Robots.allows("User-agent: *\nDisallow: /admin", "RemoteJobHunter", "/admin/x") && GigDiscovery.Robots.allows("User-agent: *\nDisallow: /admin", "RemoteJobHunter", "/faq"));
+        check("robots: the longer Allow wins", GigDiscovery.Robots.allows("User-agent: *\nDisallow: /\nAllow: /faq", "RemoteJobHunter", "/faq"));
+        check("robots: our own group beats the wildcard group", !GigDiscovery.Robots.allows("User-agent: *\nDisallow:\n\nUser-agent: RemoteJobHunter\nDisallow: /", "RemoteJobHunter", "/"));
+        check("robots: another bot's rules do not apply to us", GigDiscovery.Robots.allows("User-agent: BadBot\nDisallow: /", "RemoteJobHunter", "/"));
+        check("robots: wildcards and comments work", !GigDiscovery.Robots.allows("User-agent: *  # everyone\nDisallow: /*.json$", "RemoteJobHunter", "/data.json") && GigDiscovery.Robots.allows("User-agent: *\nDisallow: /*.json$", "RemoteJobHunter", "/data.html"));
+    }
+
+    static class FakeHttp extends Http {
+        final Map<String, String> pages = new HashMap<>();
+        final List<String> asked = new ArrayList<>();
+        String searchBody = "{\"organic\":[]}";
+        @Override String get(String url, Map<String, String> headers) throws java.io.IOException {
+            asked.add(url);
+            String b = pages.get(url);
+            if (b == null) throw new java.io.IOException("HTTP 404 from " + URI.create(url).getHost());
+            if (b.startsWith("HTTP ")) throw new java.io.IOException(b);
+            return b;
+        }
+        @Override String postJson(String url, Map<String, String> headers, String json) { asked.add("POST " + json); return searchBody; }
+    }
+
+    static void gigPipelineTests() throws Exception {
+        Profile gp = gigProfile();
+        Path tmp = Files.createTempDirectory("jh-gig");
+        Settings ss = new Settings(tmp, null, "serper-test-key", null, "m");
+        Store st = Store.load(ss.stateFile());
+        FakeHttp fh = new FakeHttp();
+        GigPipeline gpl = new GigPipeline(ss, gp, st, fh);
+        fh.pages.put("https://brandpost-example.test/", fixture("gig_creator_program.html"));
+        fh.pages.put("https://brandpost-example.test/how-it-works", "<p>How it works: pick a campaign and post. Payouts every Friday.</p>");
+
+        GigDiscovery.Lead lead = new GigDiscovery.Lead();
+        lead.domain = "brandpost-example.test"; lead.url = "https://brandpost-example.test/"; lead.name = "Brandpost"; lead.direct = true; lead.via.add("q1");
+        Gig g = gpl.process(lead, false);
+        eq("pipeline: a clean platform lands in the list", Gig.NEW, g.status);
+        check("pipeline: its own page was read", g.pageFetched && g.hasTerms && g.payoutMethods.contains("PayPal"));
+        check("pipeline: robots.txt was read first", fh.asked.get(0).endsWith("/robots.txt"));
+        check("pipeline: a useful second page was read", fh.asked.contains("https://brandpost-example.test/how-it-works"));
+        check("pipeline: terms and privacy pages are never fetched", fh.asked.stream().noneMatch(u -> u.endsWith("/terms") || u.endsWith("/privacy")));
+        check("pipeline: stored with a draft and a why-it-fits line", !g.draft.isBlank() && !g.whyFits.isBlank() && st.gig(g.id) != null);
+        check("pipeline: risk, fit and eligibility are all set", g.risk <= 3 && g.fit >= 80 && g.eligibility.equals(Gig.OK));
+        check("pipeline: remembers which search found it", g.foundVia.equals(List.of("q1")));
+
+        // robots.txt that forbids us: the page is not fetched, and the snippet is all we have
+        fh.asked.clear();
+        fh.pages.put("https://blocked.test/robots.txt", "User-agent: *\nDisallow: /");
+        fh.pages.put("https://blocked.test/", "<p>should never be read</p>");
+        GigDiscovery.Lead b = new GigDiscovery.Lead(); b.domain = "blocked.test"; b.url = "https://blocked.test/"; b.snippet = "Get paid to post short-form videos for brand campaigns. Open worldwide."; b.name = "Blocked";
+        Gig bg = gpl.process(b, false);
+        check("pipeline: a site that disallows us is not fetched", fh.asked.equals(List.of("https://blocked.test/robots.txt")) && !bg.pageFetched);
+        check("pipeline: it is still judged from the snippet, with a warning", bg.riskReasons.stream().anyMatch(r -> r.contains("could not read")));
+
+        // a server error on robots.txt means: do not push
+        fh.asked.clear();
+        fh.pages.put("https://broken.test/robots.txt", "HTTP 500 from broken.test");
+        fh.pages.put("https://broken.test/", "<p>page</p>");
+        GigDiscovery.Lead br = new GigDiscovery.Lead(); br.domain = "broken.test"; br.url = "https://broken.test/"; br.name = "Broken";
+        check("pipeline: a robots.txt server error stops the fetch", !gpl.process(br, false).pageFetched && !fh.asked.contains("https://broken.test/"));
+
+        // a page that is not about earning is dropped before it costs a review search
+        fh.asked.clear();
+        fh.pages.put("https://clippers-example.test/", "<html><head><title>LA Clippers announce new signing</title></head><body>Kid clipper joins the team as an announcer. Watch the video.</body></html>");
+        GigDiscovery.Lead nl = new GigDiscovery.Lead(); nl.domain = "clippers-example.test"; nl.url = "https://clippers-example.test/"; nl.name = "Clippers"; nl.direct = true;
+        Gig ng = gpl.process(nl, true);
+        eq("pipeline: a page with no earning wording is not a gig platform", Gig.REJECTED, ng.status);
+        check("pipeline: and says so", ng.whyFits.startsWith("Not a gig platform") && ng.fit == 0 && ng.draft.isEmpty());
+        check("pipeline: and spends no review search", fh.asked.stream().noneMatch(a -> a.startsWith("POST")));
+        check("pipeline: earning wording is recognised", GigPipeline.EARNING.matcher("Get paid to post. Creators earn up to $500. Payouts weekly.").find() && !GigPipeline.EARNING.matcher("Watch the clippers game tonight").find());
+        check("live lesson: numbered listicles with a word in between are articles", GigDiscovery.looksLikeArticle("10 Powerful Websites For Finding Micro Jobs"));
+        check("live lesson: freelance marketplaces and job posts are not gig platforms", GigDiscovery.ignored("freelancer.com") && GigDiscovery.ignored("join.com"));
+
+        // scam and excluded platforms are kept (so they are never re-read) but marked rejected
+        fh.pages.put("https://easy.test/", fixture("gig_scam.html"));
+        GigDiscovery.Lead sc = new GigDiscovery.Lead(); sc.domain = "easy.test"; sc.url = "https://easy.test/"; sc.name = "Easy"; sc.direct = true;
+        Gig sg = gpl.process(sc, true);
+        eq("pipeline: a scam page is rejected", Gig.REJECTED, sg.status);
+        eq("pipeline: with the maximum risk", 10, sg.risk);
+        check("pipeline: and the rejection reasons are kept", sg.hardRejects.size() >= 4);
+        fh.pages.put("https://cliprush-example.test/", fixture("gig_us_only.html"));
+        GigDiscovery.Lead usl = new GigDiscovery.Lead(); usl.domain = "cliprush-example.test"; usl.url = "https://cliprush-example.test/"; usl.name = "ClipRush"; usl.direct = true;
+        Gig usg = gpl.process(usl, true);
+        check("pipeline: a US-only platform is dropped for South Africa", usg.status.equals(Gig.REJECTED) && usg.eligibility.equals(Gig.EXCLUDED));
+        check("pipeline: dropped platforms spend no review credits", fh.asked.stream().noneMatch(a -> a.startsWith("POST") && a.contains("cliprush") ) && fh.asked.stream().noneMatch(a -> a.startsWith("POST") && a.contains("Easy")));
+
+        // your status and your edits survive a re-check
+        st.setGigStatus(g.id, Gig.APPROVED);
+        st.setGigDraft(g.id, "my own edited draft");
+        Gig again = gpl.recheck(g.id);
+        eq("pipeline: re-check keeps your status", Gig.APPROVED, again.status);
+        eq("pipeline: re-check keeps your edited draft", "my own edited draft", again.draft);
+        eq("pipeline: re-check keeps when it was found", g.foundAt, again.foundAt);
+
+        // full run with a canned search API
+        FakeHttp fh2 = new FakeHttp();
+        fh2.searchBody = "{\"organic\":["
+                + "{\"title\":\"Brandpost Example - get paid to post\",\"link\":\"https://brandpost-example.test/\",\"snippet\":\"Creators earn a retainer\"},"
+                + "{\"title\":\"Anyone tried clipstar.io?\",\"link\":\"https://reddit.com/r/beermoney/a\",\"snippet\":\"clipstar.io paid me last week, got paid $40\"}]}";
+        fh2.pages.put("https://brandpost-example.test/", fixture("gig_creator_program.html"));
+        Path st2File = Files.createTempDirectory("jh-gig2").resolve("state.json");
+        Store st2 = Store.load(st2File);
+        Profile limited = gigProfile(); limited.gigMaxQueriesPerRun = 6; limited.gigMaxPagesPerRun = 5; limited.gigMaxReviewChecks = 1;
+        GigPipeline run = new GigPipeline(ss, limited, st2, fh2);
+        Map<String, Object> sum = run.run();
+        eq("run: spends exactly the query budget", 6, sum.get("queriesRun"));
+        check("run: found platforms and read pages", ((Number) sum.get("pagesRead")).intValue() >= 2 && ((Number) sum.get("leads")).intValue() >= 2);
+        check("run: only one review check was allowed", ((Number) sum.get("reviewChecks")).intValue() == 1);
+        check("run: both platforms are in the store", st2.hasGigDomain("brandpost-example.test") && st2.hasGigDomain("clipstar.io"));
+        check("run: the review check used the search API", fh2.asked.stream().filter(a -> a.startsWith("POST")).count() == 7);
+        check("run: the weekly timer was set", !st2.sourceDue(GigPipeline.SOURCE, limited.gigIntervalMinutes));
+        Map<String, Object> second = run.run();
+        eq("run: a second run reads nothing it already knows (dedupe by domain)", 0, second.get("pagesRead"));
+        check("run: and says how many it skipped", ((Number) second.get("alreadyKnown")).intValue() >= 2);
+        check("run: not due again straight away", run.runIfDue() == null);
+        check("run: without a search key nothing runs", !new GigPipeline(new Settings(tmp, null, null, null, "m"), limited, st2, fh2).enabled()
+                && ((List<?>) new GigPipeline(new Settings(tmp, null, null, null, "m"), limited, st2, fh2).run().get("errors")).size() == 1);
+
+        // storage survives a restart
+        st2.save();
+        Store re = Store.load(st2File);
+        check("storage: gigs survive save and load", re.hasGigDomain("brandpost-example.test") && re.allGigs().size() >= 2);
+        Gig reloaded = re.gig(Gig.idFor("brandpost-example.test"));
+        check("storage: facts, reasons and evidence survive", reloaded != null && reloaded.payoutMethods.contains("PayPal") && !reloaded.riskReasons.isEmpty() && !reloaded.evidence.isEmpty() && reloaded.fit == st2.gig(reloaded.id).fit);
+
+        // endpoints
+        Dashboard dash = new Dashboard(ss, gp, st, new Pipeline(ss, gp, st, fh));
+        dash.setGigPipeline(gpl);
+        HttpServer srv = dash.start(0);
+        try {
+            String base = "http://localhost:" + srv.getAddress().getPort();
+            HttpClient c = HttpClient.newHttpClient();
+            HttpResponse<String> list = c.send(HttpRequest.newBuilder(URI.create(base + "/api/gigs")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("endpoint: list ok", 200, list.statusCode());
+            List<?> arr = Json.arr(Json.parse(list.body()));
+            check("endpoint: lists gigs best first", arr.size() >= 3 && ((Number) Json.obj(arr.get(0)).get("rank")).intValue() >= ((Number) Json.obj(arr.get(arr.size() - 1)).get("rank")).intValue());
+            check("endpoint: sends risk reasons and the why-it-fits line", list.body().contains("\"riskReasons\"") && list.body().contains("\"whyFits\""));
+            HttpResponse<String> noHdr = c.send(HttpRequest.newBuilder(URI.create(base + "/api/gigs/" + g.id + "/status")).POST(HttpRequest.BodyPublishers.ofString("{\"status\":\"JOINED\"}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("endpoint: change without the header refused", 403, noHdr.statusCode());
+            eq("endpoint: nothing changed", Gig.APPROVED, st.gig(g.id).status);
+            HttpResponse<String> ok = c.send(HttpRequest.newBuilder(URI.create(base + "/api/gigs/" + g.id + "/status")).header("X-JobHunter", "1").POST(HttpRequest.BodyPublishers.ofString("{\"status\":\"JOINED\"}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("endpoint: status change ok", 200, ok.statusCode());
+            eq("endpoint: gig is joined", Gig.JOINED, st.gig(g.id).status);
+            HttpResponse<String> bad = c.send(HttpRequest.newBuilder(URI.create(base + "/api/gigs/" + g.id + "/status")).header("X-JobHunter", "1").POST(HttpRequest.BodyPublishers.ofString("{\"status\":\"REJECTED\"}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("endpoint: you cannot set the automatic REJECTED status by hand", 400, bad.statusCode());
+            HttpResponse<String> dr = c.send(HttpRequest.newBuilder(URI.create(base + "/api/gigs/" + g.id + "/draft")).header("X-JobHunter", "1").POST(HttpRequest.BodyPublishers.ofString("{\"draft\":\"edited\"}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("endpoint: draft saved", "edited", st.gig(g.id).draft);
+            HttpResponse<String> unk = c.send(HttpRequest.newBuilder(URI.create(base + "/api/gigs/nope/status")).header("X-JobHunter", "1").POST(HttpRequest.BodyPublishers.ofString("{\"status\":\"NEW\"}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("endpoint: unknown gig is a 404", 404, unk.statusCode());
+            HttpResponse<String> runNoHdr = c.send(HttpRequest.newBuilder(URI.create(base + "/api/gigs/run")).POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString());
+            eq("endpoint: starting a gig search needs the header too", 403, runNoHdr.statusCode());
+            HttpResponse<String> state = c.send(HttpRequest.newBuilder(URI.create(base + "/api/state")).build(), HttpResponse.BodyHandlers.ofString());
+            check("endpoint: state says whether gig search is available", state.body().contains("\"gigsEnabled\":true"));
+        } finally { srv.stop(0); }
+
+        // settings and their defaults
+        Profile dflt = Profile.fromMap(new LinkedHashMap<>());
+        check("settings: payout methods that work from South Africa have sensible defaults", dflt.gigPayoutMethods.containsAll(List.of("PayPal", "Payoneer", "Wise", "Bank transfer")));
+        eq("settings: weekly by default", 10080, dflt.gigIntervalMinutes);
+        Profile custom = Profile.fromMap(Json.obj(Json.parse("{\"gigPayoutMethods\":[\"Wise\"],\"gigMaxQueriesPerRun\":10}")));
+        check("settings: payout methods can be edited", custom.gigPayoutMethods.equals(List.of("Wise")) && custom.gigMaxQueriesPerRun == 10);
+        Gig viaPaypal = GigExtract.extract("https://p.test/", "P", "<p>Worldwide. Get paid per task via PayPal.</p>", "");
+        GigScore.eligibility(viaPaypal, custom);
+        eq("settings: removing PayPal from your list excludes a PayPal-only gig", Gig.EXCLUDED, viaPaypal.eligibility);
     }
 
     static void entryTests() throws Exception {

@@ -53,6 +53,7 @@ Other commands:
 | `serve` | Dashboard only |
 | `daemon --every-hours 3` | Dashboard plus automatic searching (what `start.sh` runs) |
 | `top --n 15` | Prints the best jobs in the queue |
+| `gigs --n 15` | Searches for simple online gigs now (about 55 search credits) and prints the best |
 
 ## Using the dashboard
 
