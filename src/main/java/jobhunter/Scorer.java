@@ -96,6 +96,17 @@ final class Scorer {
             if (t != null) { total += 8; why.add("+8 one of your 20 target titles (" + t.title() + ")"); }
         }
 
+        // roles a school leaver can start, and roles that train you: a bonus when they also fit your skills, and a
+        // place in the queue (at the threshold, so they sit at the bottom) when they do not, so you can judge them
+        Entry.Result entry = Entry.detect(j);
+        if (!hits.isEmpty()) {
+            if (entry.training()) { total += 6; why.add("+6 training provided"); }
+            if (entry.matric()) { total += 4; why.add("+4 matric is enough (no degree or experience asked)"); }
+        } else if (entry.any()) {
+            total = Math.max(total, profile.scoreThreshold);
+            why.add("Entry-level or training role that does not match your skill list: shown so you can judge it");
+        }
+
         // penalties
         if (SENIOR.matcher(title).find()) { total -= 25; why.add("-25 senior-level title"); }
         int years = maxYears(text);

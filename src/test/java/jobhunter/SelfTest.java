@@ -54,6 +54,7 @@ public final class SelfTest {
         dedupeTests();
         summaryTests();
         workingNomadsTests();
+        entryTests();
         System.out.println(passed + " passed, " + failed + " failed");
         System.exit(failed > 0 ? 1 : 0);
     }
@@ -607,6 +608,86 @@ public final class SelfTest {
             HttpResponse<String> rep = c.send(HttpRequest.newBuilder(URI.create(base + "/api/jobs/fu1/status")).header("X-JobHunter", "1").POST(HttpRequest.BodyPublishers.ofString("{\"status\":\"REPLIED\"}")).build(), HttpResponse.BodyHandlers.ofString());
             eq("replied status accepted", 200, rep.statusCode());
             eq("job is replied", Job.REPLIED, st.get("fu1").status);
+        } finally { srv.stop(0); }
+    }
+
+    static void entryTests() throws Exception {
+        Entry.Result app = Entry.detect(job("Remote Web Development Apprentice", "LegKraal", "South Africa", "Remote apprenticeship. Mentorship and comprehensive training. Fully remote."));
+        check("entry: apprenticeship with training is training", app.training());
+        Entry.Result all = Entry.detect(job("Support Assistant", "Co", "South Africa", "Matric (Grade 12) is the minimum. No experience needed. Full training provided."));
+        check("entry: matric, no experience and training all found", all.matric() && all.noExperience() && all.training());
+        eq("entry: labels in plain words", List.of("Matric is enough", "No experience needed", "Training provided"), all.labels());
+        Entry.Result years = Entry.detect(job("Support Assistant", "Co", "South Africa", "Matric required. 3+ years of experience in support. We will train you on our tools."));
+        check("entry: years of experience cancel every entry label", !years.any());
+        Entry.Result degree = Entry.detect(job("Analyst", "Co", "South Africa", "Bachelor's degree required. No experience necessary."));
+        check("entry: a required degree cancels matric and no-experience", !degree.matric() && !degree.noExperience());
+        check("entry: senior titles never count", !Entry.detect(job("Senior Support Lead", "Co", "", "We will train you. No experience needed. Matric.")).any());
+        check("entry: we'll train you (straight apostrophe)", Entry.detect(job("Helper", "Co", "", "We'll train you from scratch.")).training());
+        check("entry: we'll train you (curly apostrophe)", Entry.detect(job("Helper", "Co", "", "We’ll train you from scratch.")).training());
+        check("entry: learnership counts as training", Entry.detect(job("ICT Learnership Programme", "Co", "", "12 month programme.")).training());
+        check("entry: ordinary job has no labels", !Entry.detect(job("Java Developer", "Co", "", "Spring Boot and MySQL. Remote.")).any());
+        check("entry: word 'training' alone is not enough", !Entry.detect(job("Data Analyst", "Co", "", "You will analyse training data for models.")).training());
+        check("entry: grade 12 spelled out", Entry.detect(job("Clerk", "Co", "", "Grade 12 with good Excel skills.")).matric());
+
+        Scorer sc = new Scorer(profile);
+        Scorer.Result fit = sc.score(job("Junior Java Developer", "Co", "Worldwide", "Java and Spring Boot, remote. We will train you. Matric is enough."));
+        check("entry score: training bonus when skills match", fit.why().stream().anyMatch(w -> w.contains("+6 training provided")));
+        check("entry score: matric bonus when skills match", fit.why().stream().anyMatch(w -> w.contains("+4 matric is enough")));
+        Scorer.Result off = sc.score(job("Beekeeper trainee", "Co", "Worldwide", "Matric is enough. No experience needed. We will train you on bees."));
+        check("entry score: unmatched entry role still reaches the queue", off.score() >= profile.scoreThreshold);
+        check("entry score: and says why it is there", off.why().stream().anyMatch(w -> w.contains("does not match your skill list")));
+        Scorer.Result sen = sc.score(job("Senior Beekeeper", "Co", "Worldwide", "We will train you. Matric. No experience needed."));
+        check("entry score: senior role gets no entry floor", sen.score() < profile.scoreThreshold);
+        Scorer.Result plain = sc.score(job("Beekeeper", "Co", "Worldwide", "Looking after bees."));
+        check("entry score: a plain unmatched job is still dropped", plain.score() < profile.scoreThreshold);
+
+        // the deal-breakers still win: an entry-level job with a fee, or a WhatsApp-only application, is rejected
+        Filter flt = new Filter(profile);
+        Job fee = job("Trainee Agent", "Co", "Worldwide", "No experience needed. We will train you. Pay a $30 registration fee to start.");
+        check("entry never bypasses the scam filter (fee)", !flt.screen(fee, new Store(Path.of("none.json"))).ok());
+        Job wa = job("Trainee Agent", "Co", "Worldwide", "No experience needed. Apply on WhatsApp for an interview today.");
+        check("entry never bypasses the scam filter (WhatsApp)", !flt.screen(wa, new Store(Path.of("none.json"))).ok());
+
+        // web-search results that are lists of jobs, not one listing, are rejected; real postings and board feeds are not
+        Store none = new Store(Path.of("none.json"));
+        Job listPage = job("Grade 12 jobs in Work From Home", "careerjunction.co.za", "South Africa", "Browse jobs.");
+        listPage.sourceType = "SEARCH";
+        check("list page by title rejected", flt.screen(listPage, none).rejects().stream().anyMatch(r -> r.contains("list of jobs")));
+        Job indeedQ = job("Matric no experience", "za.indeed.com", "South Africa", "Browse.");
+        indeedQ.sourceType = "SEARCH"; indeedQ.url = "https://za.indeed.com/q-matric-no-experience,-remote-work-l-crown-mines,-gauteng-jobs.html";
+        check("indeed search page by link rejected", flt.screen(indeedQ, none).rejects().stream().anyMatch(r -> r.contains("list of jobs")));
+        Job real = job("Remote Web Development Apprentice", "LegKraal Gate", "South Africa", "Fully remote within South Africa. Mentorship and training.");
+        real.sourceType = "SEARCH";
+        check("a real apprenticeship is not mistaken for a list", flt.screen(real, none).rejects().stream().noneMatch(r -> r.contains("list of jobs")));
+        Job linkedin = job("Frontend Developer", "HiJob", "South Africa", "Remote.");
+        linkedin.sourceType = "SEARCH"; linkedin.url = "https://za.linkedin.com/jobs/view/frontend-developer-at-hijob-work-4486650292";
+        check("linkedin job links are not mistaken for lists", flt.screen(linkedin, none).rejects().stream().noneMatch(r -> r.contains("list of jobs")));
+        Job liJobs = job("Data Labeling Specialist at Alignerr - Jobs", "Alignerr", "South Africa", "Remote.");
+        liJobs.sourceType = "SEARCH"; liJobs.source = "LinkedIn"; liJobs.url = "https://za.linkedin.com/jobs/view/data-labeling-specialist-at-alignerr-4487588473";
+        check("linkedin titles ending in '- Jobs' are real listings", flt.screen(liJobs, none).rejects().stream().noneMatch(r -> r.contains("list of jobs")));
+        Job zrJobs = job("DataAnnotation - Full Stack Software Developer Jobs", "DataAnnotation", "Remote", "Remote.");
+        zrJobs.sourceType = "SEARCH"; zrJobs.source = "ZipRecruiter";
+        check("ziprecruiter job pages are trusted the same way", flt.screen(zrJobs, none).rejects().stream().noneMatch(r -> r.contains("list of jobs")));
+        check("board feeds are not checked for list pages", flt.screen(job("Jobs Coordinator", "Co", "Worldwide", "Coordinate things."), none).rejects().stream().noneMatch(r -> r.contains("list of jobs")));
+        check("adult-content role rejected", flt.screen(job("OnlyFans Chatter Entry Level (No Experience)", "Co", "Worldwide", "Chat with fans."), none).rejects().stream().anyMatch(r -> r.contains("Adult-content")));
+
+        // the public example config ships with the new queries and stays within the per-run limit
+        Profile ex = Profile.load(Path.of("config/profile.example.json"));
+        check("example config searches for matric jobs", ex.searchQueries.stream().anyMatch(q -> q.contains("matric")));
+        check("example config searches for training jobs", ex.searchQueries.stream().anyMatch(q -> q.contains("we will train you")));
+        check("example config searches for learnerships", ex.searchQueries.stream().anyMatch(q -> q.contains("learnership")));
+        check("example config queries fit the per-run limit", ex.searchQueries.size() <= ex.maxSearchQueries);
+
+        // the dashboard tells the page which jobs are entry or training
+        Path tmp = Files.createTempDirectory("jh-entry");
+        Settings ss = new Settings(tmp, null, null, null, "m");
+        Store st = Store.load(ss.stateFile());
+        Job t = job("Remote Web Apprentice", "Acme", "South Africa", "Mentorship and comprehensive training. Matric is enough.");
+        st.add(t);
+        HttpServer srv = new Dashboard(ss, profile, st, new Pipeline(ss, profile, st, new Http())).start(0);
+        try {
+            HttpResponse<String> r = HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://localhost:" + srv.getAddress().getPort() + "/api/jobs")).build(), HttpResponse.BodyHandlers.ofString());
+            check("dashboard sends entry labels", r.body().contains("\"entry\":[\"Matric is enough\",\"Training provided\"]"));
         } finally { srv.stop(0); }
     }
 

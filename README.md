@@ -89,6 +89,7 @@ flowchart LR
 - **Follow up tab**: jobs you applied to 7 or more days ago with no reply, each with a short, plain follow-up draft. *I followed up* restarts the 7-day clock; *Stop reminding* ends it. Nothing is ever sent for you.
 - **Cover letter** button on every job: a plain-text letter built only from sentences already in `config/cv.json` (never mentions your gaps).
 - **This week tab**: jobs found, applied and replied in the last 7 days, your reply rate, best sources, and the keywords recent jobs asked for that your CV lacks (what to learn next).
+- **Entry and training jobs**: cards are tagged *Matric is enough*, *No experience needed* or *Training provided*, and the **Entry / training only** filter shows just those. A job that asks for years of experience or a degree is never tagged. These jobs get a small score bonus, and an entry-level job that matches none of your skills still reaches the queue (at the bottom) so you can judge it. Scam, fee and WhatsApp-only rules still apply to them.
 - The same job posted on several boards is recognised and shown once, even when the title or company is written slightly differently ("Sr. Dev (Remote)" and "Senior Developer").
 
 ## LinkedIn, Indeed, ZipRecruiter, Google Jobs and Handshake

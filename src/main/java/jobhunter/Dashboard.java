@@ -195,6 +195,7 @@ final class Dashboard {
     /** A job as the page sees it, plus how well your CV covers its keywords. */
     private Map<String, Object> view(Job j) {
         Map<String, Object> m = j.view();
+        m.put("entry", Entry.labels(j));
         if (profile.cv != null) m.put("cv", cvReport(j).toMap());
         if (Job.APPLIED.equals(j.status)) {
             Instant now = Instant.now();

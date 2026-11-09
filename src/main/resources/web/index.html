@@ -82,6 +82,7 @@
   <select id="typeSel"><option value="">All types</option></select>
   <select id="srcSel"><option value="">All sources</option></select>
   <input type="search" id="q" placeholder="Search title or company">
+  <label title="Jobs that say matric is enough, no experience is needed, or that they train you"><input type="checkbox" id="entryOnly"> Entry / training only</label>
 </div>
 <div id="exportBar" style="display:none;margin:8px 0"><a href="/api/export.csv" download="applications.csv"><button type="button">Export applications to CSV (Excel)</button></a></div>
 <main id="list"></main>
@@ -139,9 +140,10 @@ function render() {
     bindFollow(); return;
   }
 
-  const min = +$('minScore').value, type = $('typeSel').value, src = $('srcSel').value, q = $('q').value.toLowerCase();
+  const min = +$('minScore').value, type = $('typeSel').value, src = $('srcSel').value, q = $('q').value.toLowerCase(), entryOnly = $('entryOnly').checked;
   const wanted = TAB === 'HIDDEN' ? ['REJECTED', 'BLOCKED'] : TAB === 'APPLIED' ? ['APPLIED', 'REPLIED'] : [TAB];
   const rows = JOBS.filter(j => wanted.includes(j.status) && j.score >= min && (!type || j.workType === type) && (!src || j.source === src)
+    && (!entryOnly || (j.entry || []).length)
     && (!q || (j.title + ' ' + j.company).toLowerCase().includes(q)));
   if (!rows.length) {
     list.innerHTML = '<div class="empty">' + (TAB === 'NEW' ? 'Nothing here yet. Press <b>Search now</b>, or lower the minimum score.' : 'Nothing in this tab.') + '</div>';
@@ -171,7 +173,8 @@ function card(j) {
     + '<div class="top"><div class="score ' + cls + '">' + j.score + '</div><div style="flex:1;min-width:0">'
     + '<p class="title"><a href="' + esc(safeUrl(j.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(j.title) + '</a></p>'
     + '<div class="meta">' + meta + posted + '</div>'
-    + '<div class="chips"><span class="chip type">' + esc(j.workType.replace('_', ' ')) + '</span>' + (j.sourceType === 'SEARCH' ? '<span class="chip">from web search</span>' : '') + '</div>'
+    + '<div class="chips"><span class="chip type">' + esc(j.workType.replace('_', ' ')) + '</span>' + (j.sourceType === 'SEARCH' ? '<span class="chip">from web search</span>' : '')
+    + (j.entry || []).map(e => '<span class="chip" style="background:#1f6f43;color:#fff">' + esc(e) + '</span>').join('') + '</div>'
     + flags + why + cvLine(j) + '</div></div>'
     + '<details><summary>Draft application and listing text</summary>'
     + '<textarea data-draft>' + esc(j.draft) + '</textarea>'
@@ -334,6 +337,7 @@ function bindPlatforms() {
 $('minScore').oninput = () => { $('minScoreV').textContent = $('minScore').value; render(); };
 $('typeSel').onchange = $('srcSel').onchange = render;
 $('q').oninput = render;
+$('entryOnly').onchange = render;
 $('runBtn').onclick = async () => {
   try {
     const r = await api('/api/run', 'POST');

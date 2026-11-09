@@ -72,6 +72,14 @@ final class Filter {
     // ---------- search results that are articles, not listings ----------
     private static final Pattern ARTICLE = re("^\\s*(\\d+|top|best|how to|ways to|what is|the \\d+)\\b|\\b(best|top)\\s+\\d*\\s*(remote|work from home|online|legit)?\\s*(jobs|sites|websites|platforms|companies|apps)\\b|\\bhow to\\b|\\bguide\\b|\\b\\d+\\s+(best|top|legit|ways)\\b|\\breviews?\\b|\\bvs\\.?\\b");
 
+    /** A page that lists many jobs ("Grade 12 jobs in Work From Home", Indeed's q- search pages), not one job to apply for. */
+    private static final Set<String> TRUSTED_BOARDS = Set.of("LinkedIn", "Indeed", "ZipRecruiter");
+    private static final Pattern LISTING_TITLE = re("\\bjobs\\b");
+    private static final Pattern LISTING_URL = re("[a-z]\\.indeed\\.[a-z.]+/q-|/jobs-search");
+
+    /** Not a line of work for this tool. Kept as a plain rule so it is easy to see and easy to remove. */
+    private static final Rule ADULT = rule("adult-content role", "\\bonlyfans\\b|\\bfansly\\b|\\badult (content|entertainment|chat)\\b|\\bnsfw\\b|\\bescort\\b|\\bwebcam model\\b");
+
     private final Profile profile;
 
     Filter(Profile profile) { this.profile = profile; }
@@ -91,8 +99,12 @@ final class Filter {
         // search results need a sanity check first
         if ("SEARCH".equals(j.sourceType)) {
             if (ARTICLE.matcher(j.title).find()) rej.add("Looks like an article, not a job listing");
+            // LinkedIn, Indeed and ZipRecruiter results were already narrowed to single-job pages (their titles end in "- Jobs")
+            else if (!TRUSTED_BOARDS.contains(j.source) && (LISTING_TITLE.matcher(j.title).find() || LISTING_URL.matcher(Job.nz(j.url)).find())) rej.add("Looks like a list of jobs, not one listing");
             flags.add("Found by web search: open it and confirm it is a real, current listing");
         }
+
+        if (ADULT.re.matcher(body).find()) rej.add("Adult-content role");
 
         if (profile.upfrontFees) for (Rule r : SCAM) if (r.re.matcher(body).find()) rej.add("Possible scam: " + r.label);
         if (profile.unpaidWork) for (Rule r : UNPAID) if (r.re.matcher(body).find()) rej.add(r.label.substring(0, 1).toUpperCase(Locale.ROOT) + r.label.substring(1));
